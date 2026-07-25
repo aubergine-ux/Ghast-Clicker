@@ -166,6 +166,14 @@ static void input_thread(Config& config, Clicker& left_clicker, Clicker& right_c
             while (read(kb_fd, &ev, sizeof(ev)) == sizeof(ev)) {
                 if (ev.type != EV_KEY) continue;
 
+                if (ev.value == 1 && ev.code >= KEY_1 && ev.code <= KEY_9) {
+                    gui_state.active_slot = ev.code - KEY_1;
+                    if (config.slot_filter_enabled && !config.allowed_slots[gui_state.active_slot]) {
+                        left_clicker.set_enabled(false);
+                        right_clicker.set_enabled(false);
+                    }
+                }
+
                 if (ev.value == 1 && ev.code == static_cast<unsigned>(config.key_inventory)) {
                     if (!gui_state.in_menu) {
                         gui_state.in_menu = true;
@@ -183,11 +191,17 @@ static void input_thread(Config& config, Clicker& left_clicker, Clicker& right_c
 
                 if (gui_state.in_menu) continue;
 
+                bool slot_blocked = config.slot_filter_enabled &&
+                                    !config.allowed_slots[gui_state.active_slot];
+
                 if (ev.code == static_cast<unsigned>(config.key_left)) {
                     if (config.left_mode == ActivationMode::TOGGLE) {
-                        if (ev.value == 1) left_clicker.toggle();
+                        if (ev.value == 1) {
+                            if (slot_blocked) left_clicker.set_enabled(false);
+                            else left_clicker.toggle();
+                        }
                     } else if (config.left_mode == ActivationMode::HOLD) {
-                        left_clicker.set_enabled(ev.value != 0);
+                        left_clicker.set_enabled(ev.value != 0 && !slot_blocked);
                     } else {
                         if (ev.value == 1) {
                             gui_state.left_armed = !gui_state.left_armed;
@@ -198,9 +212,12 @@ static void input_thread(Config& config, Clicker& left_clicker, Clicker& right_c
                 }
                 else if (ev.code == static_cast<unsigned>(config.key_right)) {
                     if (config.right_mode == ActivationMode::TOGGLE) {
-                        if (ev.value == 1) right_clicker.toggle();
+                        if (ev.value == 1) {
+                            if (slot_blocked) right_clicker.set_enabled(false);
+                            else right_clicker.toggle();
+                        }
                     } else if (config.right_mode == ActivationMode::HOLD) {
-                        right_clicker.set_enabled(ev.value != 0);
+                        right_clicker.set_enabled(ev.value != 0 && !slot_blocked);
                     } else {
                         if (ev.value == 1) {
                             gui_state.right_armed = !gui_state.right_armed;

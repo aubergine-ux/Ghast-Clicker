@@ -11,6 +11,7 @@ struct GuiState {
     bool left_armed = false;
     bool right_armed = false;
     bool in_menu = false;
+    int active_slot = 0;
 
     bool show_advanced = false;
     bool show_debug = false;

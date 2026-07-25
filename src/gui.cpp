@@ -183,6 +183,14 @@ static void clicker_tab(const char* name, ClickerProfile& profile, ActivationMod
     }
 
     ImGui::Separator();
+    ImGui::Text("Double Click");
+    ImGui::SliderScalar("Chance##dbl", ImGuiDataType_Double, &profile.double_click_chance, &(const double&){0.0}, &(const double&){0.3}, "%.3f");
+    if (profile.double_click_chance > 0) {
+        ImGui::SliderScalar("Delay Min (ms)##dbl", ImGuiDataType_Double, &profile.double_click_delay_min, &(const double&){5.0}, &(const double&){80.0}, "%.0f");
+        ImGui::SliderScalar("Delay Max (ms)##dbl", ImGuiDataType_Double, &profile.double_click_delay_max, &(const double&){10.0}, &(const double&){120.0}, "%.0f");
+    }
+
+    ImGui::Separator();
     ImGui::Text("Fatigue Breaks");
     ImGui::Checkbox("Enable Breaks", &profile.breaks_enabled);
     if (profile.breaks_enabled) {
@@ -362,6 +370,21 @@ void gui_run(GuiState& state) {
                     ImGui::Separator();
                     keybind_button("Inventory Key", state.config.key_inventory);
                     ImGui::TextDisabled("Pauses clicking while inventory is open");
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Text("Hotbar Slot Filter");
+                    ImGui::TextDisabled("Only click when holding certain slots (e.g. sword slot)");
+                    ImGui::Checkbox("Enable Slot Filter", &state.config.slot_filter_enabled);
+                    if (state.config.slot_filter_enabled) {
+                        for (int i = 0; i < 9; i++) {
+                            if (i > 0) ImGui::SameLine();
+                            char slabel[4];
+                            snprintf(slabel, sizeof(slabel), "%d", i + 1);
+                            ImGui::Checkbox(slabel, &state.config.allowed_slots[i]);
+                        }
+                        ImGui::Text("Active slot: %d", state.active_slot + 1);
+                    }
 
                     ImGui::Spacing();
                     ImGui::Separator();

@@ -38,6 +38,9 @@ public:
         fprintf(f, "%s.rhythm_volatility %g\n", prefix, p.rhythm_volatility);
         fprintf(f, "%s.rhythm_tension %g\n", prefix, p.rhythm_tension);
         fprintf(f, "%s.start_delay_ms %g\n", prefix, p.start_delay_ms);
+        fprintf(f, "%s.double_click_chance %g\n", prefix, p.double_click_chance);
+        fprintf(f, "%s.double_click_delay_min %g\n", prefix, p.double_click_delay_min);
+        fprintf(f, "%s.double_click_delay_max %g\n", prefix, p.double_click_delay_max);
         fprintf(f, "%s.breaks_enabled %d\n", prefix, p.breaks_enabled ? 1 : 0);
         fprintf(f, "%s.break_interval_min %g\n", prefix, p.break_interval_min);
         fprintf(f, "%s.break_interval_max %g\n", prefix, p.break_interval_max);
@@ -72,6 +75,9 @@ public:
         else if (match("rhythm_volatility")) p.rhythm_volatility = val;
         else if (match("rhythm_tension")) p.rhythm_tension = val;
         else if (match("start_delay_ms")) p.start_delay_ms = val;
+        else if (match("double_click_chance")) p.double_click_chance = val;
+        else if (match("double_click_delay_min")) p.double_click_delay_min = val;
+        else if (match("double_click_delay_max")) p.double_click_delay_max = val;
         else if (match("breaks_enabled")) p.breaks_enabled = (int)val != 0;
         else if (match("break_interval_min")) p.break_interval_min = val;
         else if (match("break_interval_max")) p.break_interval_max = val;
@@ -98,6 +104,14 @@ public:
             else if (!strcmp(key, "key_inventory")) cfg.key_inventory = (int)val;
             else if (!strcmp(key, "left_mode")) cfg.left_mode = (int)val == 0 ? ActivationMode::TOGGLE : ((int)val == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
             else if (!strcmp(key, "right_mode")) cfg.right_mode = (int)val == 0 ? ActivationMode::TOGGLE : ((int)val == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
+            else if (!strcmp(key, "slot_filter_enabled")) cfg.slot_filter_enabled = (int)val != 0;
+            else {
+                for (int i = 0; i < 9; i++) {
+                    char sbuf[32];
+                    snprintf(sbuf, sizeof(sbuf), "allowed_slot_%d", i);
+                    if (!strcmp(key, sbuf)) { cfg.allowed_slots[i] = (int)val != 0; break; }
+                }
+            }
         }
         fclose(f);
         return true;
@@ -119,6 +133,9 @@ public:
         fprintf(f, "key_inventory %d\n", cfg.key_inventory);
         fprintf(f, "left_mode %d\n", cfg.left_mode == ActivationMode::TOGGLE ? 0 : (cfg.left_mode == ActivationMode::HOLD ? 1 : 2));
         fprintf(f, "right_mode %d\n", cfg.right_mode == ActivationMode::TOGGLE ? 0 : (cfg.right_mode == ActivationMode::HOLD ? 1 : 2));
+        fprintf(f, "slot_filter_enabled %d\n", cfg.slot_filter_enabled ? 1 : 0);
+        for (int i = 0; i < 9; i++)
+            fprintf(f, "allowed_slot_%d %d\n", i, cfg.allowed_slots[i] ? 1 : 0);
 
         fclose(f);
         return true;

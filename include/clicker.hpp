@@ -80,6 +80,16 @@ private:
                 wait_ns(hold_ns);
                 device_.click(profile_.mouse_button, 0);
 
+                if (profile_.double_click_chance > 0 && Variance::chance(profile_.double_click_chance)) {
+                    double delay_ms = Variance::range(profile_.double_click_delay_min, profile_.double_click_delay_max);
+                    wait_ns(static_cast<int64_t>(delay_ms * 1'000'000));
+                    int64_t dbl_hold = calculate_hold_ns(interval_ns);
+                    device_.click(profile_.mouse_button, 1);
+                    click_count_++;
+                    wait_ns(dbl_hold);
+                    device_.click(profile_.mouse_button, 0);
+                }
+
                 tracker_.record(
                     1'000'000'000.0 / interval_ns,
                     hold_ns, interval_ns, current_trend_);
