@@ -29,7 +29,7 @@ static bool is_physical_device(int fd) {
 
     char name[256] = "";
     ioctl(fd, EVIOCGNAME(sizeof(name)), name);
-    if (strcasestr(name, "GhostTap")) return false;
+    if (strcasestr(name, "Ghast Clicker")) return false;
     if (strcasestr(name, "Virtual")) return false;
 
     return true;
@@ -297,8 +297,8 @@ int main(int argc, char* argv[]) {
             return 0;
         }
         else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            printf("GhostTap - Humanized auto-clicker for Linux/Wayland\n\n");
-            printf("Usage: ghosttap [options]\n\n");
+            printf("Ghast Clicker - Humanized auto-clicker for Linux/Wayland\n\n");
+            printf("Usage: ghast-clicker [options]\n\n");
             printf("Options:\n");
             printf("  --lcps <n>     Left CPS mean (default: %.1f)\n", config.left.cps_mean);
             printf("  --rcps <n>     Right CPS mean (default: %.1f)\n", config.right.cps_mean);
@@ -309,14 +309,14 @@ int main(int argc, char* argv[]) {
             printf("  --hold         Hold mode\n");
             printf("  --mouse        Mouse mode (arm with key, hold mouse to click)\n");
             printf("  --headless     Run without GUI (CLI only)\n");
-            printf("  --save         Save current config to ~/.config/ghosttap/config\n\n");
+            printf("  --save         Save current config to ~/.config/ghast-clicker/config\n\n");
             printf("Requires /dev/uinput and /dev/input/* access.\n");
             printf("Run: sudo usermod -aG input $USER  (then re-login)\n");
             return 0;
         }
     }
 
-    printf("\n  GhostTap - Linux/Wayland Port\n");
+    printf("\n  Ghast Clicker - Linux/Wayland Port\n");
     printf("  ─────────────────────────────\n");
 
     UInputDevice device;

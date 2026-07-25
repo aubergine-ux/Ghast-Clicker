@@ -190,7 +190,7 @@ void gui_run(GuiState& state) {
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    GLFWwindow* window = glfwCreateWindow(620, 520, "GhostTap", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(620, 520, "Ghast Clicker", nullptr, nullptr);
     if (!window) {
         fprintf(stderr, "Failed to create GLFW window\n");
         glfwTerminate();
@@ -277,8 +277,8 @@ void gui_run(GuiState& state) {
         ImGuiWindowFlags wf = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                               ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
 
-        if (ImGui::Begin("GhostTap", nullptr, wf)) {
-            ImGui::Text("GhostTap");
+        if (ImGui::Begin("Ghast Clicker", nullptr, wf)) {
+            ImGui::Text("Ghast Clicker");
             ImGui::SameLine(ImGui::GetWindowWidth() - 260);
 
             if (state.left.is_enabled())
@@ -333,7 +333,7 @@ void gui_run(GuiState& state) {
 
                     ImGui::Spacing();
                     ImGui::Separator();
-                    ImGui::TextDisabled("GhostTap - Linux/Wayland Port");
+                    ImGui::TextDisabled("Ghast Clicker - Linux/Wayland Port");
 
                     ImGui::EndTabItem();
                 }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ghosttap LANGUAGES CXX)
+project(ghast-clicker LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,21 +18,21 @@ set(IMGUI_SOURCES
 find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
 
-add_executable(ghosttap
+add_executable(ghast-clicker
     src/main.cpp
     src/gui.cpp
     ${IMGUI_SOURCES}
 )
 
-target_include_directories(ghosttap PRIVATE
+target_include_directories(ghast-clicker PRIVATE
     include
     ${IMGUI_DIR}
 )
 
-target_link_libraries(ghosttap PRIVATE
+target_link_libraries(ghast-clicker PRIVATE
     pthread
     glfw
     OpenGL::GL
 )
 
-install(TARGETS ghosttap DESTINATION bin)
+install(TARGETS ghast-clicker DESTINATION bin)

@@ -32,7 +32,7 @@ public:
         ioctl(fd_, UI_SET_EVBIT, EV_SYN);
 
         struct uinput_setup setup{};
-        std::strncpy(setup.name, "GhostTap Virtual Mouse", UINPUT_MAX_NAME_SIZE - 1);
+        std::strncpy(setup.name, "Ghast Clicker Virtual Mouse", UINPUT_MAX_NAME_SIZE - 1);
         setup.id.bustype = BUS_USB;
         setup.id.vendor = 0x1234;
         setup.id.product = 0x5678;

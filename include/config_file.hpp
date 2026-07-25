@@ -13,7 +13,7 @@ public:
     static std::string path() {
         const char* home = getenv("HOME");
         if (!home) home = "/tmp";
-        return std::string(home) + "/.config/ghosttap";
+        return std::string(home) + "/.config/ghast-clicker";
     }
 
     static void write_profile(FILE* f, const char* prefix, const ClickerProfile& p) {

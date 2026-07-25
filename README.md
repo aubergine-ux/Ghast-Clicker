@@ -1,16 +1,16 @@
-<h1 align="center">GhostTap — Linux/Wayland Port</h1>
+<h1 align="center">Ghast Clicker</h1>
 
 <p align="center">
-  A humanized auto-clicker for Linux, ported from <a href="https://github.com/IcySnex/GhostTap">GhostTap</a> (Minecraft 1.7.10/1.8.9 mod) and <a href="https://github.com/b1scoito/clicker">b1scoito/clicker</a> (Windows).
+  A humanized auto-clicker for Linux/Wayland, built on the humanization engine from <a href="https://github.com/IcySnex/GhostTap">GhostTap</a> and <a href="https://github.com/b1scoito/clicker">b1scoito/clicker</a>.
 </p>
 
 ---
 
 ## What Is This?
 
-A standalone Linux auto-clicker with the full humanization engine from GhostTap — Gaussian CPS distributions, random spikes/stutters, variable hold times, and rhythmic drift. Runs on Wayland (and X11 via XWayland) with an ImGui GUI.
+A standalone Linux auto-clicker with deep humanization — Gaussian CPS distributions, random spikes/stutters, variable hold times, and rhythmic drift. Runs on Wayland (and X11 via XWayland) with an ImGui GUI.
 
-This is **not** a Minecraft mod. It's an independent tool that injects clicks via `/dev/uinput` and reads keyboard/mouse input via evdev. It works with any application.
+Injects clicks via `/dev/uinput` and reads keyboard/mouse input via evdev. Works with any application.
 
 ---
 
@@ -20,7 +20,7 @@ This is **not** a Minecraft mod. It's an independent tool that injects clicks vi
 - **Independent Left & Right clickers** with separate CPS, humanization, and activation
 - **3 Activation Modes:** Toggle, Hold, Mouse (arm with key, hold real mouse to click)
 - **Deep humanization:** Gaussian CPS, spikes, stutters, heavy holds, rhythm volatility/tension
-- **Config profiles** saved to `~/.config/ghosttap/`
+- **Config profiles** saved to `~/.config/ghast-clicker/`
 - **Analytics recording** with CSV export
 - **Interactive keybind picker** in the GUI
 - **Inventory pause** (E key pauses clicking, E/Esc resumes)
@@ -53,10 +53,10 @@ You need access to `/dev/uinput` and `/dev/input/*`:
 # Option 1: Add yourself to input group (persistent, recommended)
 sudo usermod -aG input $USER
 # Log out and back in, then:
-./ghosttap
+./ghast-clicker
 
 # Option 2: Run with sudo
-sudo -E ./ghosttap
+sudo -E ./ghast-clicker
 ```
 
 ### CLI Options
@@ -71,7 +71,7 @@ sudo -E ./ghosttap
 --hold          Hold mode
 --mouse         Mouse mode
 --headless      CLI only, no GUI
---save          Save config to ~/.config/ghosttap/config
+--save          Save config to ~/.config/ghast-clicker/config
 ```
 
 ---
