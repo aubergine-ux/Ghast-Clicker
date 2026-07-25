@@ -1,0 +1,15 @@
+{
+	"required": true,
+	"minVersion": "0.7",
+	"package": "com.icysnex.ghosttap.mixin",
+	"refmap": "mixin.ghosttap.refmap.json",
+	"compatibilityLevel": "JAVA_8",
+	"client": [
+		"MixinLwjglInputMouseInject",
+		"MixinPlayerChat",
+		"MixinFmlModList"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

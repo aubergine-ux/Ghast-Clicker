@@ -1,0 +1,22 @@
+[
+	{
+		"modid": "ghosttap",
+		"name": "GhostTap",
+		"description": "A lightweight internal auto‑clicker focused on customization and undetectability",
+		"version": "${version}",
+		"mcversion": "${mcversion}",
+		"url": "https://github.com/IcySnex/GhostTap",
+		"updateUrl": "https://github.com/IcySnex/GhostTap/releases",
+		"authorList": [
+			"IcySnex"
+		],
+		"credits": "IcySnex",
+		"logoFile": "",
+		"screenshots": [
+
+		],
+		"dependencies": [
+
+		]
+	}
+]

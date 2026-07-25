@@ -1,15 +1,28 @@
 # Build output
 build/
+out/
 
-# Reference sources (not part of the port)
+# Reference sources
 GhostTap-1.7.10/
 GhostTap_source/
 
-# Editor files
+# IDE
 .vscode/
 .idea/
+*.ipr
+*.iws
+*.iml
 *.swp
 *~
 
-# OS files
+# Gradle
+run/
+.gradle/
+
+# Tools output
+tools/analytics/*.csv
+tools/plots/*.png
+
+# Misc
 .DS_Store
+*.hprof
