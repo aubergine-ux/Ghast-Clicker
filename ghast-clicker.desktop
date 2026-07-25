@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Ghast Clicker
+Comment=A Linux auto-clicker with realistic humanization for Wayland
+Exec=ghast-clicker
+Icon=input-mouse
+Terminal=false
+Type=Application
+Categories=Utility;
