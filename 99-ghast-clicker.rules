@@ -1,0 +1,2 @@
+# Flat acceleration for Ghast Clicker virtual mouse to match real mouse sensitivity
+ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="Ghast Clicker Virtual Mouse", ENV{LIBINPUT_ATTR_POINTER_ACCEL_PROFILE}="flat", ENV{LIBINPUT_ATTR_POINTER_ACCEL}="0"

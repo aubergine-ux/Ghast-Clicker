@@ -59,6 +59,15 @@ sudo usermod -aG input $USER
 sudo -E ./ghast-clicker
 ```
 
+### Fix mouse sensitivity
+
+Install the udev rule to prevent the virtual mouse from using a different acceleration profile:
+
+```bash
+sudo cp 99-ghast-clicker.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+```
+
 ### CLI Options
 
 ```
