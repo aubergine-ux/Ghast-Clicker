@@ -115,12 +115,24 @@ static void mode_combo(const char* label, ActivationMode& mode) {
 }
 
 static void clicker_tab(const char* name, ClickerProfile& profile, ActivationMode& mode,
-                         Clicker& clicker, int& key, bool& show_advanced) {
+                         Clicker& clicker, int& key, bool& show_advanced,
+                         const ClickerPreset* presets) {
     if (!ImGui::BeginTabItem(name)) return;
 
     ImGui::Spacing();
 
     keybind_button("Toggle Key", key);
+
+    ImGui::Separator();
+    ImGui::Text("Presets");
+    for (int i = 0; i < PRESET_COUNT; i++) {
+        if (i > 0) ImGui::SameLine();
+        if (ImGui::Button(presets[i].name)) {
+            int saved_button = profile.mouse_button;
+            profile = presets[i].profile;
+            profile.mouse_button = saved_button;
+        }
+    }
 
     ImGui::Separator();
     ImGui::Text("Activation");
@@ -298,10 +310,10 @@ void gui_run(GuiState& state) {
 
             if (ImGui::BeginTabBar("##tabs")) {
                 clicker_tab("Left Clicker", state.config.left, state.config.left_mode,
-                            state.left, state.config.key_left, show_advanced_left);
+                            state.left, state.config.key_left, show_advanced_left, LEFT_PRESETS);
 
                 clicker_tab("Right Clicker", state.config.right, state.config.right_mode,
-                            state.right, state.config.key_right, show_advanced_right);
+                            state.right, state.config.key_right, show_advanced_right, RIGHT_PRESETS);
 
                 if (ImGui::BeginTabItem("General")) {
                     ImGui::Spacing();
