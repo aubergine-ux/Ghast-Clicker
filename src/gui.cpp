@@ -183,6 +183,16 @@ static void clicker_tab(const char* name, ClickerProfile& profile, ActivationMod
     }
 
     ImGui::Separator();
+    ImGui::Text("Fatigue Breaks");
+    ImGui::Checkbox("Enable Breaks", &profile.breaks_enabled);
+    if (profile.breaks_enabled) {
+        ImGui::SliderScalar("Break Every Min (s)", ImGuiDataType_Double, &profile.break_interval_min, &(const double&){5.0}, &(const double&){120.0}, "%.0f");
+        ImGui::SliderScalar("Break Every Max (s)", ImGuiDataType_Double, &profile.break_interval_max, &(const double&){5.0}, &(const double&){120.0}, "%.0f");
+        ImGui::SliderScalar("Break Duration Min (s)", ImGuiDataType_Double, &profile.break_duration_min, &(const double&){0.1}, &(const double&){5.0}, "%.1f");
+        ImGui::SliderScalar("Break Duration Max (s)", ImGuiDataType_Double, &profile.break_duration_max, &(const double&){0.1}, &(const double&){5.0}, "%.1f");
+    }
+
+    ImGui::Separator();
     const auto& t = clicker.tracker();
     ImGui::Text("Status: %s", clicker.is_enabled() ? "ACTIVE" : "Idle");
     ImGui::Text("Avg CPS: %.1f  |  Avg Hold: %.1f ms  |  Clicks: %u",
@@ -273,8 +283,32 @@ void gui_run(GuiState& state) {
     char status_msg[128] = "";
     float status_timer = 0;
 
+    bool always_on_top = false;
+    bool dragging = false;
+    double drag_start_x = 0, drag_start_y = 0;
+    int win_start_x = 0, win_start_y = 0;
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        // Window dragging via title bar
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            double mx, my;
+            glfwGetCursorPos(window, &mx, &my);
+            if (!dragging && my < 30.0 && !ImGui::IsAnyItemActive()) {
+                dragging = true;
+                drag_start_x = mx;
+                drag_start_y = my;
+                glfwGetWindowPos(window, &win_start_x, &win_start_y);
+            }
+            if (dragging) {
+                int dx = (int)(mx - drag_start_x);
+                int dy = (int)(my - drag_start_y);
+                glfwSetWindowPos(window, win_start_x + dx, win_start_y + dy);
+            }
+        } else {
+            dragging = false;
+        }
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -291,7 +325,13 @@ void gui_run(GuiState& state) {
 
         if (ImGui::Begin("Ghast Clicker", nullptr, wf)) {
             ImGui::Text("Ghast Clicker");
-            ImGui::SameLine(ImGui::GetWindowWidth() - 260);
+            ImGui::SameLine(ImGui::GetWindowWidth() - 310);
+
+            if (ImGui::SmallButton(always_on_top ? "[pinned]" : "[pin]")) {
+                always_on_top = !always_on_top;
+                glfwSetWindowAttrib(window, GLFW_FLOATING, always_on_top ? GLFW_TRUE : GLFW_FALSE);
+            }
+            ImGui::SameLine();
 
             if (state.left.is_enabled())
                 ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "L: ACTIVE");
@@ -407,6 +447,25 @@ void gui_run(GuiState& state) {
                 if (ImGui::BeginTabItem("Analytics")) {
                     ImGui::Spacing();
                     ImGui::Text("Click Analytics");
+                    ImGui::Separator();
+
+                    ImGui::Text("Left CPS");
+                    {
+                        const auto& t = state.left.tracker();
+                        char overlay[32];
+                        snprintf(overlay, sizeof(overlay), "%.1f CPS", t.avg_cps());
+                        ImGui::PlotLines("##lcps", t.graph_data(), t.graph_size(),
+                                         t.graph_offset(), overlay, 0.0f, 35.0f, ImVec2(-1, 60));
+                    }
+                    ImGui::Text("Right CPS");
+                    {
+                        const auto& t = state.right.tracker();
+                        char overlay[32];
+                        snprintf(overlay, sizeof(overlay), "%.1f CPS", t.avg_cps());
+                        ImGui::PlotLines("##rcps", t.graph_data(), t.graph_size(),
+                                         t.graph_offset(), overlay, 0.0f, 35.0f, ImVec2(-1, 60));
+                    }
+
                     ImGui::Separator();
 
                     bool left_rec = state.left.tracker().is_recording();

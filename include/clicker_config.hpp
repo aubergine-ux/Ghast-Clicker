@@ -32,6 +32,12 @@ struct ClickerProfile {
 
     double start_delay_ms = 0.0;
 
+    bool breaks_enabled = false;
+    double break_interval_min = 15.0;
+    double break_interval_max = 45.0;
+    double break_duration_min = 0.3;
+    double break_duration_max = 1.5;
+
     int mouse_button = BTN_LEFT;
 };
 
@@ -47,7 +53,7 @@ inline const ClickerPreset LEFT_PRESETS[] = {
         0.02, 2.0, 4.0,
         45.0, 8.0, 25.0, 85.0,
         0.01, 10.0, 25.0,
-        0.3, 0.03, 0.0, BTN_LEFT
+        0.3, 0.03, 0.0, false, 15.0, 45.0, 0.3, 1.5, BTN_LEFT
     }},
     {"Jitter (12-16 CPS)", {
         14.0, 1.8, 10.0, 18.0, 1.0,
@@ -55,7 +61,7 @@ inline const ClickerPreset LEFT_PRESETS[] = {
         0.05, 3.0, 6.0,
         32.0, 5.0, 15.0, 60.0,
         0.02, 12.0, 30.0,
-        0.7, 0.05, 0.0, BTN_LEFT
+        0.7, 0.05, 0.0, false, 15.0, 45.0, 0.3, 1.5, BTN_LEFT
     }},
     {"Butterfly (16-22 CPS)", {
         19.0, 2.2, 14.0, 24.0, 1.2,
@@ -63,7 +69,7 @@ inline const ClickerPreset LEFT_PRESETS[] = {
         0.04, 5.0, 8.0,
         22.0, 4.0, 10.0, 45.0,
         0.02, 8.0, 20.0,
-        1.0, 0.06, 0.0, BTN_LEFT
+        1.0, 0.06, 0.0, false, 15.0, 45.0, 0.3, 1.5, BTN_LEFT
     }},
     {"Drag Click (25+ CPS)", {
         28.0, 3.0, 22.0, 35.0, 1.5,
@@ -71,7 +77,7 @@ inline const ClickerPreset LEFT_PRESETS[] = {
         0.03, 4.0, 7.0,
         15.0, 3.0, 8.0, 30.0,
         0.01, 5.0, 15.0,
-        1.2, 0.08, 0.0, BTN_LEFT
+        1.2, 0.08, 0.0, false, 15.0, 45.0, 0.3, 1.5, BTN_LEFT
     }},
 };
 
@@ -82,7 +88,7 @@ inline const ClickerPreset RIGHT_PRESETS[] = {
         0.02, 2.0, 4.0,
         45.0, 8.0, 25.0, 85.0,
         0.01, 10.0, 25.0,
-        0.3, 0.03, 0.0, BTN_RIGHT
+        0.3, 0.03, 0.0, false, 15.0, 45.0, 0.3, 1.5, BTN_RIGHT
     }},
     {"Jitter (12-16 CPS)", {
         14.0, 1.8, 10.0, 18.0, 1.0,
@@ -90,7 +96,7 @@ inline const ClickerPreset RIGHT_PRESETS[] = {
         0.05, 3.0, 6.0,
         32.0, 5.0, 15.0, 60.0,
         0.02, 12.0, 30.0,
-        0.7, 0.05, 0.0, BTN_RIGHT
+        0.7, 0.05, 0.0, false, 15.0, 45.0, 0.3, 1.5, BTN_RIGHT
     }},
     {"Butterfly (16-22 CPS)", {
         19.0, 2.2, 14.0, 24.0, 1.2,
@@ -98,7 +104,7 @@ inline const ClickerPreset RIGHT_PRESETS[] = {
         0.04, 5.0, 8.0,
         22.0, 4.0, 10.0, 45.0,
         0.02, 8.0, 20.0,
-        1.0, 0.06, 0.0, BTN_RIGHT
+        1.0, 0.06, 0.0, false, 15.0, 45.0, 0.3, 1.5, BTN_RIGHT
     }},
     {"Drag Click (25+ CPS)", {
         28.0, 3.0, 22.0, 35.0, 1.5,
@@ -106,7 +112,7 @@ inline const ClickerPreset RIGHT_PRESETS[] = {
         0.03, 4.0, 7.0,
         15.0, 3.0, 8.0, 30.0,
         0.01, 5.0, 15.0,
-        1.2, 0.08, 0.0, BTN_RIGHT
+        1.2, 0.08, 0.0, false, 15.0, 45.0, 0.3, 1.5, BTN_RIGHT
     }},
 };
 

@@ -55,7 +55,23 @@ private:
                     std::chrono::microseconds(static_cast<int64_t>(profile_.start_delay_ms * 1000)));
             }
 
+            auto next_break = std::chrono::steady_clock::now();
+            if (profile_.breaks_enabled) {
+                double secs = Variance::range(profile_.break_interval_min, profile_.break_interval_max);
+                next_break += std::chrono::milliseconds(static_cast<int64_t>(secs * 1000));
+            }
+
             while (enabled_ && running_) {
+                if (profile_.breaks_enabled && std::chrono::steady_clock::now() >= next_break) {
+                    double dur = Variance::range(profile_.break_duration_min, profile_.break_duration_max);
+                    int64_t dur_ms = static_cast<int64_t>(dur * 1000);
+                    auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(dur_ms);
+                    while (enabled_ && running_ && std::chrono::steady_clock::now() < end)
+                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    double secs = Variance::range(profile_.break_interval_min, profile_.break_interval_max);
+                    next_break = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int64_t>(secs * 1000));
+                }
+
                 int64_t interval_ns = calculate_interval_ns();
                 int64_t hold_ns = calculate_hold_ns(interval_ns);
 

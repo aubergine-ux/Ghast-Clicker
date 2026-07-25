@@ -18,12 +18,17 @@ struct ClickData {
 class Tracker {
     static constexpr int WINDOW = 20;
     static constexpr int MAX_HISTORY = 2000;
+    static constexpr int GRAPH_SIZE = 120;
 
     double cps_samples_[WINDOW] = {};
     double hold_samples_[WINDOW] = {};
     int pos_ = 0;
     int count_ = 0;
     uint64_t total_clicks_ = 0;
+
+    float cps_graph_[GRAPH_SIZE] = {};
+    int graph_pos_ = 0;
+    int graph_count_ = 0;
 
     std::deque<ClickData> history_;
     mutable std::mutex mu_;
@@ -41,6 +46,10 @@ public:
         pos_ = (pos_ + 1) % WINDOW;
         if (count_ < WINDOW) count_++;
         total_clicks_++;
+
+        cps_graph_[graph_pos_] = static_cast<float>(cps);
+        graph_pos_ = (graph_pos_ + 1) % GRAPH_SIZE;
+        if (graph_count_ < GRAPH_SIZE) graph_count_++;
 
         if (recording_) {
             std::lock_guard<std::mutex> lock(mu_);
@@ -66,6 +75,11 @@ public:
     }
 
     uint64_t total() const { return total_clicks_; }
+
+    const float* graph_data() const { return cps_graph_; }
+    int graph_offset() const { return graph_pos_; }
+    int graph_count() const { return graph_count_; }
+    static constexpr int graph_size() { return GRAPH_SIZE; }
 
     void set_recording(bool v) { recording_ = v; }
     bool is_recording() const { return recording_; }
