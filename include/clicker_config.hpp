@@ -2,6 +2,8 @@
 #include <linux/input-event-codes.h>
 
 enum class ActivationMode { TOGGLE, HOLD, MOUSE };
+enum class DistributionType { GAUSSIAN, POISSON, UNIFORM };
+enum class MacroAction { LEFT_CLICK, RIGHT_CLICK, DELAY, SWITCH_SLOT };
 
 struct ClickerProfile {
     double cps_mean = 13.0;
@@ -43,6 +45,7 @@ struct ClickerProfile {
     double break_duration_max = 1.5;
 
     int mouse_button = BTN_LEFT;
+    DistributionType distribution = DistributionType::GAUSSIAN;
 };
 
 struct ClickerPreset {
@@ -122,6 +125,24 @@ inline const ClickerPreset RIGHT_PRESETS[] = {
 
 constexpr int PRESET_COUNT = sizeof(LEFT_PRESETS) / sizeof(LEFT_PRESETS[0]);
 
+struct MacroStep {
+    MacroAction action = MacroAction::LEFT_CLICK;
+    int count = 1;
+    double delay_ms = 100.0;
+    int slot = 1;
+};
+
+constexpr int MAX_MACROS = 4;
+constexpr int MAX_MACRO_STEPS = 16;
+
+struct Macro {
+    char name[32] = "";
+    MacroStep steps[MAX_MACRO_STEPS] = {};
+    int step_count = 0;
+    bool loop = false;
+    int key_bind = 0;
+};
+
 struct Config {
     ClickerProfile left;
     ClickerProfile right;
@@ -136,6 +157,9 @@ struct Config {
 
     bool slot_filter_enabled = false;
     bool allowed_slots[9] = {true, false, false, false, false, false, false, false, false};
+
+    bool audio_enabled = true;
+    Macro macros[MAX_MACROS] = {};
 
     Config() {
         left.mouse_button = BTN_LEFT;

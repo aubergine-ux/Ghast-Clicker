@@ -5,6 +5,7 @@
 #include <GLFW/glfw3.h>
 #include <cstdio>
 #include <ctime>
+#include <chrono>
 #include <linux/input-event-codes.h>
 
 static const char* key_name(int code) {
@@ -147,6 +148,17 @@ static void clicker_tab(const char* name, ClickerProfile& profile, ActivationMod
     ImGui::SliderScalar("Std Dev", ImGuiDataType_Double, &profile.cps_stddev, &(const double&){0.0}, &(const double&){5.0}, "%.2f");
     ImGui::SliderScalar("Min CPS", ImGuiDataType_Double, &profile.cps_min, &(const double&){1.0}, &(const double&){20.0}, "%.1f");
     ImGui::SliderScalar("Max CPS", ImGuiDataType_Double, &profile.cps_max, &(const double&){5.0}, &(const double&){30.0}, "%.1f");
+
+    {
+        int dist_idx = static_cast<int>(profile.distribution);
+        if (ImGui::Combo("Distribution", &dist_idx, "Gaussian\0Poisson\0Uniform\0"))
+            profile.distribution = static_cast<DistributionType>(dist_idx);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Gaussian: bell curve around mean (default)\n"
+                              "Poisson: natural integer variance, stddev ignored\n"
+                              "Uniform: flat random between min/max CPS");
+        }
+    }
 
     ImGui::Separator();
     ImGui::Text("Humanization");
@@ -398,6 +410,49 @@ void gui_run(GuiState& state) {
 
                     ImGui::Spacing();
                     ImGui::Separator();
+                    ImGui::Text("Audio");
+                    ImGui::Checkbox("Toggle Sound", &state.config.audio_enabled);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Play a beep when clickers toggle on/off");
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Text("Session Stats");
+                    {
+                        bool any_active = state.left.is_enabled() || state.right.is_enabled();
+                        if (any_active)
+                            state.active_time_s += io.DeltaTime;
+
+                        if (state.left.is_enabled()) {
+                            double cps = lt.avg_cps();
+                            if (cps > state.peak_cps_left) state.peak_cps_left = cps;
+                        }
+                        if (state.right.is_enabled()) {
+                            double cps = rt.avg_cps();
+                            if (cps > state.peak_cps_right) state.peak_cps_right = cps;
+                        }
+
+                        auto elapsed = std::chrono::steady_clock::now() - state.session_start;
+                        double session_secs = std::chrono::duration<double>(elapsed).count();
+                        int s_min = (int)session_secs / 60;
+                        int s_sec = (int)session_secs % 60;
+                        int a_min = (int)state.active_time_s / 60;
+                        int a_sec = (int)state.active_time_s % 60;
+                        double pct = session_secs > 0 ? state.active_time_s / session_secs * 100.0 : 0;
+                        uint32_t total = state.left.click_count() + state.right.click_count();
+                        double avg = state.active_time_s > 0 ? total / state.active_time_s : 0;
+
+                        ImGui::Text("Duration: %dm %02ds", s_min, s_sec);
+                        ImGui::Text("Active: %dm %02ds (%.0f%%)", a_min, a_sec, pct);
+                        ImGui::Text("Total Clicks: %u (L: %u | R: %u)",
+                                    total, state.left.click_count(), state.right.click_count());
+                        ImGui::Text("Session Avg CPS: %.1f", avg);
+                        ImGui::Text("Peak CPS - L: %.1f | R: %.1f",
+                                    state.peak_cps_left, state.peak_cps_right);
+                    }
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
                     ImGui::Checkbox("Show Debug", &state.show_debug);
                     if (state.show_debug) {
                         ImGui::Text("FPS: %.1f (%.1f ms)", io.Framerate, 1000.0f / io.Framerate);
@@ -409,6 +464,104 @@ void gui_run(GuiState& state) {
                     ImGui::Spacing();
                     ImGui::Separator();
                     ImGui::TextDisabled("Ghast Clicker - Linux/Wayland Port");
+
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Macros")) {
+                    ImGui::Spacing();
+                    ImGui::Text("Macro Sequences");
+                    ImGui::Separator();
+
+                    for (int m = 0; m < MAX_MACROS; m++) {
+                        if (m > 0) ImGui::SameLine();
+                        char mlabel[16];
+                        snprintf(mlabel, sizeof(mlabel), "%d##mtab", m + 1);
+                        bool active = (state.selected_macro == m);
+                        if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.65f, 0.48f, 0.82f, 1.0f));
+                        if (ImGui::Button(mlabel, ImVec2(40, 0)))
+                            state.selected_macro = m;
+                        if (active) ImGui::PopStyleColor();
+                    }
+
+                    auto& mac = state.config.macros[state.selected_macro];
+
+                    ImGui::InputText("Name", mac.name, sizeof(mac.name));
+                    ImGui::Checkbox("Loop", &mac.loop);
+                    ImGui::SameLine();
+                    keybind_button("Macro Key", mac.key_bind);
+
+                    ImGui::Separator();
+                    ImGui::Text("Steps (%d/%d)", mac.step_count, MAX_MACRO_STEPS);
+
+                    int remove_idx = -1;
+                    for (int s = 0; s < mac.step_count; s++) {
+                        ImGui::PushID(s);
+                        auto& step = mac.steps[s];
+
+                        int action_idx = static_cast<int>(step.action);
+                        ImGui::SetNextItemWidth(120);
+                        if (ImGui::Combo("##action", &action_idx, "Left Click\0Right Click\0Delay\0Switch Slot\0"))
+                            step.action = static_cast<MacroAction>(action_idx);
+
+                        ImGui::SameLine();
+                        switch (step.action) {
+                            case MacroAction::LEFT_CLICK:
+                            case MacroAction::RIGHT_CLICK:
+                                ImGui::SetNextItemWidth(60);
+                                ImGui::InputInt("##cnt", &step.count, 0);
+                                if (step.count < 1) step.count = 1;
+                                ImGui::SameLine();
+                                ImGui::SetNextItemWidth(80);
+                                ImGui::InputDouble("ms##intv", &step.delay_ms, 0, 0, "%.0f");
+                                if (step.delay_ms < 1) step.delay_ms = 1;
+                                break;
+                            case MacroAction::DELAY:
+                                ImGui::SetNextItemWidth(100);
+                                ImGui::InputDouble("ms##del", &step.delay_ms, 0, 0, "%.0f");
+                                if (step.delay_ms < 1) step.delay_ms = 1;
+                                break;
+                            case MacroAction::SWITCH_SLOT:
+                                ImGui::SetNextItemWidth(60);
+                                ImGui::InputInt("Slot##sw", &step.slot, 0);
+                                if (step.slot < 1) step.slot = 1;
+                                if (step.slot > 9) step.slot = 9;
+                                break;
+                        }
+
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("X"))
+                            remove_idx = s;
+
+                        ImGui::PopID();
+                    }
+
+                    if (remove_idx >= 0) {
+                        for (int s = remove_idx; s < mac.step_count - 1; s++)
+                            mac.steps[s] = mac.steps[s + 1];
+                        mac.step_count--;
+                    }
+
+                    if (mac.step_count < MAX_MACRO_STEPS) {
+                        if (ImGui::Button("+ Add Step"))
+                            mac.steps[mac.step_count++] = MacroStep{};
+                    }
+
+                    ImGui::Separator();
+                    if (state.macro_runner.is_running()) {
+                        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f),
+                            "Running (step %d/%d, loop %d)",
+                            state.macro_runner.current_step() + 1,
+                            mac.step_count, state.macro_runner.loop_count());
+                        if (ImGui::Button("Stop", ImVec2(100, 0)))
+                            state.macro_runner.stop();
+                    } else {
+                        ImGui::TextDisabled("Idle");
+                        if (mac.step_count > 0) {
+                            if (ImGui::Button("Run", ImVec2(100, 0)))
+                                state.macro_runner.start(mac, &state.active_slot);
+                        }
+                    }
 
                     ImGui::EndTabItem();
                 }

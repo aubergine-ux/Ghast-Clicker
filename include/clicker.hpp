@@ -101,7 +101,19 @@ private:
 
     int64_t calculate_interval_ns() {
         current_trend_ = Variance::trend(current_trend_, profile_.rhythm_volatility, profile_.rhythm_tension);
-        double cps = Variance::gaussian(profile_.cps_mean + current_trend_, profile_.cps_stddev);
+
+        double cps;
+        switch (profile_.distribution) {
+            case DistributionType::POISSON:
+                cps = Variance::poisson(std::max(0.5, profile_.cps_mean + current_trend_));
+                break;
+            case DistributionType::UNIFORM:
+                cps = Variance::range(profile_.cps_min, profile_.cps_max) + current_trend_;
+                break;
+            default:
+                cps = Variance::gaussian(profile_.cps_mean + current_trend_, profile_.cps_stddev);
+                break;
+        }
 
         if (Variance::chance(profile_.spike_chance))
             cps += Variance::range(profile_.spike_min, profile_.spike_max);
