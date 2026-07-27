@@ -1,3 +1,4 @@
+#include "audio.hpp"
 #include "clicker.hpp"
 #include "clicker_config.hpp"
 #include "config_file.hpp"
@@ -195,6 +196,7 @@ static void input_thread(Config& config, Clicker& left_clicker, Clicker& right_c
                                     !config.allowed_slots[gui_state.active_slot];
 
                 if (ev.code == static_cast<unsigned>(config.key_left)) {
+                    bool was = left_clicker.is_enabled();
                     if (config.left_mode == ActivationMode::TOGGLE) {
                         if (ev.value == 1) {
                             if (slot_blocked) left_clicker.set_enabled(false);
@@ -209,8 +211,13 @@ static void input_thread(Config& config, Clicker& left_clicker, Clicker& right_c
                             else if (mouse_left_held) left_clicker.set_enabled(true);
                         }
                     }
+                    if (config.audio_enabled && left_clicker.is_enabled() != was) {
+                        if (left_clicker.is_enabled()) Audio::beep_on();
+                        else Audio::beep_off();
+                    }
                 }
                 else if (ev.code == static_cast<unsigned>(config.key_right)) {
+                    bool was = right_clicker.is_enabled();
                     if (config.right_mode == ActivationMode::TOGGLE) {
                         if (ev.value == 1) {
                             if (slot_blocked) right_clicker.set_enabled(false);
@@ -223,6 +230,20 @@ static void input_thread(Config& config, Clicker& left_clicker, Clicker& right_c
                             gui_state.right_armed = !gui_state.right_armed;
                             if (!gui_state.right_armed) right_clicker.set_enabled(false);
                             else if (mouse_right_held) right_clicker.set_enabled(true);
+                        }
+                    }
+                    if (config.audio_enabled && right_clicker.is_enabled() != was) {
+                        if (right_clicker.is_enabled()) Audio::beep_on();
+                        else Audio::beep_off();
+                    }
+                }
+                else if (ev.value == 1) {
+                    for (int m = 0; m < MAX_MACROS; m++) {
+                        if (config.macros[m].key_bind > 0 &&
+                            ev.code == static_cast<unsigned>(config.macros[m].key_bind) &&
+                            config.macros[m].step_count > 0) {
+                            gui_state.macro_runner.toggle(config.macros[m], &gui_state.active_slot);
+                            break;
                         }
                     }
                 }
@@ -345,7 +366,7 @@ int main(int argc, char* argv[]) {
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    GuiState gui_state{config, left_clicker, right_clicker};
+    GuiState gui_state(config, left_clicker, right_clicker, device);
 
     std::thread input_thr(input_thread, std::ref(config), std::ref(left_clicker),
                           std::ref(right_clicker), std::ref(device), std::ref(gui_state));

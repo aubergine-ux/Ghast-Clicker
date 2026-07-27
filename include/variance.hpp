@@ -22,6 +22,13 @@ public:
         return dist(rng);
     }
 
+    static double poisson(double mean) {
+        if (mean <= 0) return 0;
+        thread_local std::mt19937 rng{std::random_device{}()};
+        std::poisson_distribution<int> dist(mean);
+        return static_cast<double>(dist(rng));
+    }
+
     static double trend(double current, double volatility, double tension) {
         double move = range(-volatility, volatility);
         return (current + move) * (1.0 - tension);

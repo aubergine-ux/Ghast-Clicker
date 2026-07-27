@@ -29,6 +29,9 @@ public:
         ioctl(fd_, UI_SET_KEYBIT, BTN_SIDE);
         ioctl(fd_, UI_SET_KEYBIT, BTN_EXTRA);
 
+        for (int k = KEY_1; k <= KEY_9; k++)
+            ioctl(fd_, UI_SET_KEYBIT, k);
+
         ioctl(fd_, UI_SET_EVBIT, EV_SYN);
 
         struct uinput_setup setup{};

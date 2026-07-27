@@ -46,6 +46,7 @@ public:
         fprintf(f, "%s.break_interval_max %g\n", prefix, p.break_interval_max);
         fprintf(f, "%s.break_duration_min %g\n", prefix, p.break_duration_min);
         fprintf(f, "%s.break_duration_max %g\n", prefix, p.break_duration_max);
+        fprintf(f, "%s.distribution %d\n", prefix, static_cast<int>(p.distribution));
     }
 
     static void read_profile_key(const char* key, double val, const char* prefix, ClickerProfile& p) {
@@ -83,6 +84,7 @@ public:
         else if (match("break_interval_max")) p.break_interval_max = val;
         else if (match("break_duration_min")) p.break_duration_min = val;
         else if (match("break_duration_max")) p.break_duration_max = val;
+        else if (match("distribution")) p.distribution = static_cast<DistributionType>(static_cast<int>(val));
     }
 
     static bool load(Config& cfg, const std::string& filename = "config") {
@@ -105,11 +107,46 @@ public:
             else if (!strcmp(key, "left_mode")) cfg.left_mode = (int)val == 0 ? ActivationMode::TOGGLE : ((int)val == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
             else if (!strcmp(key, "right_mode")) cfg.right_mode = (int)val == 0 ? ActivationMode::TOGGLE : ((int)val == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
             else if (!strcmp(key, "slot_filter_enabled")) cfg.slot_filter_enabled = (int)val != 0;
+            else if (!strcmp(key, "audio_enabled")) cfg.audio_enabled = (int)val != 0;
+            else if (!strcmp(key, "macro_count")) { /* counted implicitly */ }
             else {
-                for (int i = 0; i < 9; i++) {
+                bool handled = false;
+                for (int i = 0; i < 9 && !handled; i++) {
                     char sbuf[32];
                     snprintf(sbuf, sizeof(sbuf), "allowed_slot_%d", i);
-                    if (!strcmp(key, sbuf)) { cfg.allowed_slots[i] = (int)val != 0; break; }
+                    if (!strcmp(key, sbuf)) { cfg.allowed_slots[i] = (int)val != 0; handled = true; }
+                }
+                for (int m = 0; m < MAX_MACROS && !handled; m++) {
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "macro_%d.name", m);
+                    if (!strcmp(key, buf)) {
+                        const char* name_start = strstr(line, buf);
+                        if (name_start) {
+                            name_start += strlen(buf);
+                            while (*name_start == ' ') name_start++;
+                            strncpy(cfg.macros[m].name, name_start, 31);
+                            cfg.macros[m].name[31] = '\0';
+                            char* nl = strchr(cfg.macros[m].name, '\n');
+                            if (nl) *nl = '\0';
+                        }
+                        handled = true; break;
+                    }
+                    snprintf(buf, sizeof(buf), "macro_%d.loop", m);
+                    if (!strcmp(key, buf)) { cfg.macros[m].loop = (int)val != 0; handled = true; break; }
+                    snprintf(buf, sizeof(buf), "macro_%d.key_bind", m);
+                    if (!strcmp(key, buf)) { cfg.macros[m].key_bind = (int)val; handled = true; break; }
+                    snprintf(buf, sizeof(buf), "macro_%d.step_count", m);
+                    if (!strcmp(key, buf)) { cfg.macros[m].step_count = std::min((int)val, MAX_MACRO_STEPS); handled = true; break; }
+                    for (int s = 0; s < MAX_MACRO_STEPS && !handled; s++) {
+                        snprintf(buf, sizeof(buf), "macro_%d.step_%d.action", m, s);
+                        if (!strcmp(key, buf)) { cfg.macros[m].steps[s].action = static_cast<MacroAction>((int)val); handled = true; break; }
+                        snprintf(buf, sizeof(buf), "macro_%d.step_%d.count", m, s);
+                        if (!strcmp(key, buf)) { cfg.macros[m].steps[s].count = (int)val; handled = true; break; }
+                        snprintf(buf, sizeof(buf), "macro_%d.step_%d.delay_ms", m, s);
+                        if (!strcmp(key, buf)) { cfg.macros[m].steps[s].delay_ms = val; handled = true; break; }
+                        snprintf(buf, sizeof(buf), "macro_%d.step_%d.slot", m, s);
+                        if (!strcmp(key, buf)) { cfg.macros[m].steps[s].slot = (int)val; handled = true; break; }
+                    }
                 }
             }
         }
@@ -136,6 +173,27 @@ public:
         fprintf(f, "slot_filter_enabled %d\n", cfg.slot_filter_enabled ? 1 : 0);
         for (int i = 0; i < 9; i++)
             fprintf(f, "allowed_slot_%d %d\n", i, cfg.allowed_slots[i] ? 1 : 0);
+
+        fprintf(f, "audio_enabled %d\n", cfg.audio_enabled ? 1 : 0);
+
+        int macro_count = 0;
+        for (int m = 0; m < MAX_MACROS; m++)
+            if (cfg.macros[m].step_count > 0 || cfg.macros[m].name[0]) macro_count = m + 1;
+        fprintf(f, "macro_count %d\n", macro_count);
+        for (int m = 0; m < macro_count; m++) {
+            const auto& mac = cfg.macros[m];
+            fprintf(f, "macro_%d.name %s\n", m, mac.name[0] ? mac.name : "Untitled");
+            fprintf(f, "macro_%d.loop %d\n", m, mac.loop ? 1 : 0);
+            fprintf(f, "macro_%d.key_bind %d\n", m, mac.key_bind);
+            fprintf(f, "macro_%d.step_count %d\n", m, mac.step_count);
+            for (int s = 0; s < mac.step_count; s++) {
+                const auto& step = mac.steps[s];
+                fprintf(f, "macro_%d.step_%d.action %d\n", m, s, static_cast<int>(step.action));
+                fprintf(f, "macro_%d.step_%d.count %d\n", m, s, step.count);
+                fprintf(f, "macro_%d.step_%d.delay_ms %g\n", m, s, step.delay_ms);
+                fprintf(f, "macro_%d.step_%d.slot %d\n", m, s, step.slot);
+            }
+        }
 
         fclose(f);
         return true;
