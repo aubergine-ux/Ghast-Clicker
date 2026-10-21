@@ -253,21 +253,79 @@ static void input_thread(Config& config, Clicker& left_clicker, Clicker& right_c
         if (nfds > 1 && (fds[1].revents & POLLIN)) {
             while (read(mouse_fd, &ev, sizeof(ev)) == sizeof(ev)) {
                 if (ev.type == EV_KEY) {
-                    if (ev.code == BTN_LEFT) {
-                        mouse_left_held = (ev.value != 0);
-                        if (config.left_mode == ActivationMode::MOUSE && gui_state.left_armed && !gui_state.in_menu)
-                            left_clicker.set_enabled(mouse_left_held);
-                        else
-                            device.click(BTN_LEFT, ev.value);
+                    bool slot_blocked = config.slot_filter_enabled &&
+                                        !config.allowed_slots[gui_state.active_slot];
+                    bool is_bound_toggle = false;
+
+                    if (!gui_state.in_menu) {
+                        if (ev.code == static_cast<unsigned>(config.key_left)) {
+                            bool was = left_clicker.is_enabled();
+                            if (config.left_mode == ActivationMode::TOGGLE) {
+                                if (ev.value == 1) {
+                                    if (slot_blocked) left_clicker.set_enabled(false);
+                                    else left_clicker.toggle();
+                                }
+                            } else if (config.left_mode == ActivationMode::HOLD) {
+                                left_clicker.set_enabled(ev.value != 0 && !slot_blocked);
+                            } else {
+                                if (ev.value == 1) {
+                                    gui_state.left_armed = !gui_state.left_armed;
+                                    if (!gui_state.left_armed) left_clicker.set_enabled(false);
+                                    else if (mouse_left_held) left_clicker.set_enabled(true);
+                                }
+                            }
+                            if (config.audio_enabled && left_clicker.is_enabled() != was) {
+                                if (left_clicker.is_enabled()) Audio::beep_on();
+                                else Audio::beep_off();
+                            }
+                            is_bound_toggle = true;
+                        }
+                        else if (ev.code == static_cast<unsigned>(config.key_right)) {
+                            bool was = right_clicker.is_enabled();
+                            if (config.right_mode == ActivationMode::TOGGLE) {
+                                if (ev.value == 1) {
+                                    if (slot_blocked) right_clicker.set_enabled(false);
+                                    else right_clicker.toggle();
+                                }
+                            } else if (config.right_mode == ActivationMode::HOLD) {
+                                right_clicker.set_enabled(ev.value != 0 && !slot_blocked);
+                            } else {
+                                if (ev.value == 1) {
+                                    gui_state.right_armed = !gui_state.right_armed;
+                                    if (!gui_state.right_armed) right_clicker.set_enabled(false);
+                                    else if (mouse_right_held) right_clicker.set_enabled(true);
+                                }
+                            }
+                            if (config.audio_enabled && right_clicker.is_enabled() != was) {
+                                if (right_clicker.is_enabled()) Audio::beep_on();
+                                else Audio::beep_off();
+                            }
+                            is_bound_toggle = true;
+                        }
                     }
-                    else if (ev.code == BTN_RIGHT) {
-                        mouse_right_held = (ev.value != 0);
-                        if (config.right_mode == ActivationMode::MOUSE && gui_state.right_armed && !gui_state.in_menu)
-                            right_clicker.set_enabled(mouse_right_held);
-                        else
-                            device.click(BTN_RIGHT, ev.value);
-                    }
-                    else {
+
+                    if (!is_bound_toggle) {
+                        if (ev.code == BTN_LEFT) {
+                            mouse_left_held = (ev.value != 0);
+                            if (config.left_mode == ActivationMode::MOUSE && gui_state.left_armed && !gui_state.in_menu)
+                                left_clicker.set_enabled(mouse_left_held);
+                            else
+                                device.click(BTN_LEFT, ev.value);
+                        }
+                        else if (ev.code == BTN_RIGHT) {
+                            mouse_right_held = (ev.value != 0);
+                            if (config.right_mode == ActivationMode::MOUSE && gui_state.right_armed && !gui_state.in_menu)
+                                right_clicker.set_enabled(mouse_right_held);
+                            else
+                                device.click(BTN_RIGHT, ev.value);
+                        }
+                        else {
+                            device.click(ev.code, ev.value);
+                        }
+                    } else {
+                        // It is a bound toggle key. We must still inject it because the mouse is grabbed.
+                        if (ev.code == BTN_LEFT) mouse_left_held = (ev.value != 0);
+                        else if (ev.code == BTN_RIGHT) mouse_right_held = (ev.value != 0);
                         device.click(ev.code, ev.value);
                     }
                 }
