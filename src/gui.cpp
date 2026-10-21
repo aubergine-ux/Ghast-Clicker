@@ -176,6 +176,8 @@ static void setup_oxygen_theme(int preset, float custom_r, float custom_g, float
     style.ScrollbarRounding     = 8.0f;
     style.GrabRounding          = 4.0f;
     style.TabRounding           = 6.0f;
+    style.AntiAliasedLines = true;
+    style.AntiAliasedFill  = true;
 
     style.WindowTitleAlign      = ImVec2(0.5f, 0.5f);
     style.WindowMenuButtonPosition = ImGuiDir_None;
@@ -321,7 +323,7 @@ static void AddRoundedRectFilledGradV(ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 
         return;
     }
     int start_vtx = dl->VtxBuffer.Size;
-    dl->AddRectFilled(a, b, IM_COL32_WHITE, rounding);
+    dl->AddRectFilled(a, b, IM_COL32_WHITE, rounding);   // AA fringe verts have alpha 0
     int end_vtx = dl->VtxBuffer.Size;
     ImDrawVert* vtx = dl->VtxBuffer.Data + start_vtx;
     for (int i = 0; i < end_vtx - start_vtx; i++) {
@@ -336,8 +338,10 @@ static void AddRoundedRectFilledGradV(ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 
         int g1 = (col_bot >> IM_COL32_G_SHIFT) & 0xFF;
         int b1 = (col_bot >> IM_COL32_B_SHIFT) & 0xFF;
         int a1 = (col_bot >> IM_COL32_A_SHIFT) & 0xFF;
+        int va = (vtx[i].col >> IM_COL32_A_SHIFT) & 0xFF;          // original AA alpha (255 core, 0 fringe)
+        int al = (a0 + (int)((a1 - a0) * t)) * va / 255;           // gradient alpha * fringe alpha
         vtx[i].col = IM_COL32(r0 + (int)((r1-r0)*t), g0 + (int)((g1-g0)*t),
-                              b0 + (int)((b1-b0)*t), a0 + (int)((a1-a0)*t));
+                              b0 + (int)((b1-b0)*t), al);
     }
 }
 
