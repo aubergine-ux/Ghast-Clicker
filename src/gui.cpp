@@ -38,6 +38,16 @@ static const char* key_name(int code) {
         case KEY_DELETE: return "Delete"; case KEY_INSERT: return "Insert";
         case KEY_HOME: return "Home"; case KEY_END: return "End";
         case KEY_PAGEUP: return "PageUp"; case KEY_PAGEDOWN: return "PageDown";
+        case BTN_LEFT: return "Mouse L"; case BTN_RIGHT: return "Mouse R";
+        case BTN_MIDDLE: return "Mouse M"; case BTN_SIDE: return "Mouse Side";
+        case BTN_EXTRA: return "Mouse Extra";
+        case KEY_KP0: return "KP 0"; case KEY_KP1: return "KP 1"; case KEY_KP2: return "KP 2";
+        case KEY_KP3: return "KP 3"; case KEY_KP4: return "KP 4"; case KEY_KP5: return "KP 5";
+        case KEY_KP6: return "KP 6"; case KEY_KP7: return "KP 7"; case KEY_KP8: return "KP 8";
+        case KEY_KP9: return "KP 9"; case KEY_KPDOT: return "KP .";
+        case KEY_KPENTER: return "KP Enter"; case KEY_KPPLUS: return "KP +";
+        case KEY_KPMINUS: return "KP -"; case KEY_KPASTERISK: return "KP *";
+        case KEY_KPSLASH: return "KP /";
         default:
             snprintf(buf, sizeof(buf), "Key %d", code);
             return buf;
@@ -72,6 +82,23 @@ static int glfw_to_evdev(int glfw_key) {
         case GLFW_KEY_END: return KEY_END;
         case GLFW_KEY_PAGE_UP: return KEY_PAGEUP;
         case GLFW_KEY_PAGE_DOWN: return KEY_PAGEDOWN;
+        case GLFW_KEY_KP_ENTER: return KEY_KPENTER;
+        case GLFW_KEY_KP_DECIMAL: return KEY_KPDOT;
+        case GLFW_KEY_KP_DIVIDE: return KEY_KPSLASH;
+        case GLFW_KEY_KP_MULTIPLY: return KEY_KPASTERISK;
+        case GLFW_KEY_KP_SUBTRACT: return KEY_KPMINUS;
+        case GLFW_KEY_KP_ADD: return KEY_KPPLUS;
+        case GLFW_KEY_KP_EQUAL: return KEY_KPEQUAL;
+        case GLFW_KEY_KP_0: return KEY_KP0;
+        case GLFW_KEY_KP_1: return KEY_KP1;
+        case GLFW_KEY_KP_2: return KEY_KP2;
+        case GLFW_KEY_KP_3: return KEY_KP3;
+        case GLFW_KEY_KP_4: return KEY_KP4;
+        case GLFW_KEY_KP_5: return KEY_KP5;
+        case GLFW_KEY_KP_6: return KEY_KP6;
+        case GLFW_KEY_KP_7: return KEY_KP7;
+        case GLFW_KEY_KP_8: return KEY_KP8;
+        case GLFW_KEY_KP_9: return KEY_KP9;
         default: return -1;
     }
 }
@@ -87,6 +114,25 @@ static void key_callback(GLFWwindow*, int key, int, int action, int) {
         int evdev = glfw_to_evdev(key);
         if (evdev >= 0)
             *g_binding_target = evdev;
+    }
+    g_binding_target = nullptr;
+}
+
+static void mouse_button_callback(GLFWwindow*, int button, int action, int) {
+    if (!g_binding_target || action != GLFW_PRESS) return;
+    int evdev = -1;
+    switch (button) {
+        case GLFW_MOUSE_BUTTON_LEFT: evdev = BTN_LEFT; break;
+        case GLFW_MOUSE_BUTTON_RIGHT: evdev = BTN_RIGHT; break;
+        case GLFW_MOUSE_BUTTON_MIDDLE: evdev = BTN_MIDDLE; break;
+        case GLFW_MOUSE_BUTTON_4: evdev = BTN_SIDE; break;
+        case GLFW_MOUSE_BUTTON_5: evdev = BTN_EXTRA; break;
+        default: 
+            if (button >= 6) evdev = BTN_FORWARD + (button - 6); 
+            break;
+    }
+    if (evdev >= 0) {
+        *g_binding_target = evdev;
     }
     g_binding_target = nullptr;
 }
@@ -243,6 +289,7 @@ void gui_run(GuiState& state) {
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
     glfwSetKeyCallback(window, key_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
