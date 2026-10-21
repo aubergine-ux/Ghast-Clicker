@@ -175,7 +175,7 @@ static void input_thread(Config& config, Clicker& left_clicker, Clicker& right_c
                     }
                 }
 
-                if (ev.value == 1 && ev.code == static_cast<unsigned>(config.key_inventory)) {
+                if (config.inventory_key_enabled && ev.value == 1 && ev.code == static_cast<unsigned>(config.key_inventory)) {
                     if (!gui_state.in_menu) {
                         gui_state.in_menu = true;
                         left_clicker.set_enabled(false);
