@@ -104,6 +104,11 @@ public:
             if (!strcmp(key, "key_left")) cfg.key_left = (int)val;
             else if (!strcmp(key, "key_right")) cfg.key_right = (int)val;
             else if (!strcmp(key, "key_inventory")) cfg.key_inventory = (int)val;
+            else if (!strcmp(key, "inventory_key_enabled")) cfg.inventory_key_enabled = (int)val != 0;
+            else if (!strcmp(key, "accent_preset")) cfg.accent_preset = (int)val;
+            else if (!strcmp(key, "accent_r")) cfg.accent_r = val;
+            else if (!strcmp(key, "accent_g")) cfg.accent_g = val;
+            else if (!strcmp(key, "accent_b")) cfg.accent_b = val;
             else if (!strcmp(key, "left_mode")) cfg.left_mode = (int)val == 0 ? ActivationMode::TOGGLE : ((int)val == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
             else if (!strcmp(key, "right_mode")) cfg.right_mode = (int)val == 0 ? ActivationMode::TOGGLE : ((int)val == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
             else if (!strcmp(key, "slot_filter_enabled")) cfg.slot_filter_enabled = (int)val != 0;
@@ -168,6 +173,11 @@ public:
         fprintf(f, "key_left %d\n", cfg.key_left);
         fprintf(f, "key_right %d\n", cfg.key_right);
         fprintf(f, "key_inventory %d\n", cfg.key_inventory);
+        fprintf(f, "inventory_key_enabled %d\n", cfg.inventory_key_enabled ? 1 : 0);
+        fprintf(f, "accent_preset %d\n", cfg.accent_preset);
+        fprintf(f, "accent_r %f\n", cfg.accent_r);
+        fprintf(f, "accent_g %f\n", cfg.accent_g);
+        fprintf(f, "accent_b %f\n", cfg.accent_b);
         fprintf(f, "left_mode %d\n", cfg.left_mode == ActivationMode::TOGGLE ? 0 : (cfg.left_mode == ActivationMode::HOLD ? 1 : 2));
         fprintf(f, "right_mode %d\n", cfg.right_mode == ActivationMode::TOGGLE ? 0 : (cfg.right_mode == ActivationMode::HOLD ? 1 : 2));
         fprintf(f, "slot_filter_enabled %d\n", cfg.slot_filter_enabled ? 1 : 0);
