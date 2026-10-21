@@ -6,7 +6,9 @@
 #include <cstdio>
 #include <ctime>
 #include <chrono>
+#include <cstring>
 #include <linux/input-event-codes.h>
+#include <cfloat>
 
 static const char* key_name(int code) {
     static char buf[32];
@@ -127,8 +129,8 @@ static void mouse_button_callback(GLFWwindow*, int button, int action, int) {
         case GLFW_MOUSE_BUTTON_MIDDLE: evdev = BTN_MIDDLE; break;
         case GLFW_MOUSE_BUTTON_4: evdev = BTN_SIDE; break;
         case GLFW_MOUSE_BUTTON_5: evdev = BTN_EXTRA; break;
-        default: 
-            if (button >= 6) evdev = BTN_FORWARD + (button - 6); 
+        default:
+            if (button >= 6) evdev = BTN_FORWARD + (button - 6);
             break;
     }
     if (evdev >= 0) {
@@ -137,134 +139,330 @@ static void mouse_button_callback(GLFWwindow*, int button, int action, int) {
     g_binding_target = nullptr;
 }
 
-static void keybind_button(const char* label, int& key_code) {
-    char buf[64];
-    if (g_binding_target == &key_code) {
-        snprintf(buf, sizeof(buf), "Press a key...##%s", label);
-    } else if (key_code == 0) {
-        snprintf(buf, sizeof(buf), "Click to bind##%s", label);
-    } else {
-        snprintf(buf, sizeof(buf), "%s##%s", key_name(key_code), label);
-    }
+static const float LABEL_W = 175.0f;
 
-    if (ImGui::Button(buf, ImVec2(150, 0))) {
-        g_binding_target = &key_code;
-    }
+// Glassy oxygen button. Only full-rounding calls; gradient quads inset 3px
+// so their square corners stay inside the rounded silhouette.
+static bool oxygen_button(const char* label, ImVec2 size_arg = ImVec2(0, 0)) {
+    const float R = 7.0f;
+    ImVec2 ls = ImGui::CalcTextSize(label, nullptr, true);
+    ImVec2 sz = size_arg;
+    if (sz.x <= 0) sz.x = ls.x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    if (sz.y <= 0) sz.y = ImGui::GetFrameHeight();
+    ImVec2 mn = ImGui::GetCursorScreenPos();
+    ImVec2 mx(mn.x + sz.x, mn.y + sz.y);
+
+    bool clicked = ImGui::InvisibleButton(label, sz);
+    bool hov = ImGui::IsItemHovered();
+    bool act = ImGui::IsItemActive();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    ImU32 top = act ? IM_COL32(36, 82, 134, 255) : hov ? IM_COL32(104, 166, 232, 255) : IM_COL32(78, 136, 200, 255);
+    ImU32 bot = act ? IM_COL32(20, 48, 82, 255)  : hov ? IM_COL32(48, 98, 156, 255)  : IM_COL32(32, 72, 118, 255);
+    dl->AddRectFilled(mn, mx, bot, R);
+    dl->AddRectFilledMultiColor(ImVec2(mn.x + 3, mn.y + 3), ImVec2(mx.x - 3, mx.y - 3),
+                                top, top, IM_COL32(0,0,0,0), IM_COL32(0,0,0,0));
+    float midY = mn.y + sz.y * 0.52f;
+    dl->AddRectFilledMultiColor(ImVec2(mn.x + 3, mn.y + 3), ImVec2(mx.x - 3, midY),
+                                IM_COL32(255,255,255,85), IM_COL32(255,255,255,85),
+                                IM_COL32(255,255,255,6),  IM_COL32(255,255,255,6));
+    dl->AddRect(mn, mx, IM_COL32(165, 208, 250, 110), 1.0f, R);
+    const char* tend = strstr(label, "##");
+    dl->AddText(ImVec2(mn.x + (sz.x - ls.x) * 0.5f, mn.y + (sz.y - ls.y) * 0.5f),
+                IM_COL32(238, 246, 255, 255), label, tend ? tend : nullptr);
+    return clicked;
+}
+
+static void keybind_button(const char* label, int& key_code) {
+    ImGui::AlignTextToFramePadding();
+    char buf[64];
+    if (g_binding_target == &key_code)      snprintf(buf, sizeof(buf), "Press a key...##%s", label);
+    else if (key_code == 0)                 snprintf(buf, sizeof(buf), "Click to bind##%s", label);
+    else                                    snprintf(buf, sizeof(buf), "%s##%s", key_name(key_code), label);
+    if (oxygen_button(buf, ImVec2(150, 0))) g_binding_target = &key_code;
     ImGui::SameLine();
     ImGui::Text("%s", label);
 }
 
+static void keybind_row(const char* label, int& key_code) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    ImGui::SameLine(LABEL_W);
+    char buf[64];
+    if (g_binding_target == &key_code)      snprintf(buf, sizeof(buf), "Press a key...##%s", label);
+    else if (key_code == 0)                 snprintf(buf, sizeof(buf), "Click to bind##%s", label);
+    else                                    snprintf(buf, sizeof(buf), "%s##%s", key_name(key_code), label);
+    if (oxygen_button(buf, ImVec2(140, 0))) g_binding_target = &key_code;
+}
+
+static bool row_slider(const char* label, double* v, double lo, double hi, const char* fmt) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    ImGui::SameLine(LABEL_W);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    char id[96]; snprintf(id, sizeof(id), "##%s", label);
+    bool changed = ImGui::SliderScalar(id, ImGuiDataType_Double, v, &lo, &hi, fmt);
+
+    // oxygen thumb overlay (native grab is transparent via style)
+    ImVec2 r0 = ImGui::GetItemRectMin(), r1 = ImGui::GetItemRectMax();
+    float grab_w = ImGui::GetStyle().GrabMinSize;
+    float t = (float)((*v - lo) / (hi - lo)); if (t < 0) t = 0; if (t > 1) t = 1;
+    float gx = r0.x + (r1.x - r0.x - grab_w) * t;
+    ImVec2 g0(gx, r0.y + 3), g1(gx + grab_w, r1.y - 3);
+    bool hov = ImGui::IsItemHovered(); bool act = ImGui::IsItemActive();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImU32 top = act ? IM_COL32(36, 82, 134, 255) : hov ? IM_COL32(104, 166, 232, 255) : IM_COL32(78, 136, 200, 255);
+    ImU32 bot = act ? IM_COL32(20, 48, 82, 255)  : hov ? IM_COL32(48, 98, 156, 255)  : IM_COL32(32, 72, 118, 255);
+    float gr = (g1.x - g0.x) * 0.5f;
+    dl->AddRectFilled(g0, g1, bot, gr);
+    dl->AddRectFilledMultiColor(ImVec2(g0.x + 2, g0.y + 2), ImVec2(g1.x - 2, g1.y - 2),
+                                top, top, IM_COL32(0,0,0,0), IM_COL32(0,0,0,0));
+    dl->AddRectFilledMultiColor(ImVec2(g0.x + 2, g0.y + 2), ImVec2(g1.x - 2, g0.y + (g1.y - g0.y) * 0.55f),
+                                IM_COL32(255,255,255,90), IM_COL32(255,255,255,90), IM_COL32(255,255,255,8), IM_COL32(255,255,255,8));
+    dl->AddRect(g0, g1, IM_COL32(165, 208, 250, 130), 1.0f, gr);
+    return changed;
+}
+
+// Combo with native frame border disabled and arrow blended into the frame;
+// one clean rounded rim drawn by us afterwards => single border, uniform hover.
+static bool combo_framed(const char* id, int* idx, const char* items) {
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
+    bool changed = ImGui::Combo(id, idx, items);
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                                        ImGui::GetColorU32(ImGuiCol_Border), 1.0f,
+                                        ImGui::GetStyle().FrameRounding);
+    return changed;
+}
+
+static bool row_combo(const char* label, int* idx, const char* items) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    ImGui::SameLine(LABEL_W);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    char id[96]; snprintf(id, sizeof(id), "##%s", label);
+    return combo_framed(id, idx, items);
+}
+
 static void mode_combo(const char* label, ActivationMode& mode) {
     int idx = mode == ActivationMode::TOGGLE ? 0 : (mode == ActivationMode::HOLD ? 1 : 2);
-    if (ImGui::Combo(label, &idx, "Toggle\0Hold\0Mouse\0")) {
+    if (combo_framed(label, &idx, "Toggle\0Hold\0Mouse\0")) {
         mode = idx == 0 ? ActivationMode::TOGGLE : (idx == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
     }
 }
 
-static void clicker_tab(const char* name, ClickerProfile& profile, ActivationMode& mode,
-                         Clicker& clicker, int& key, bool& show_advanced,
-                         const ClickerPreset* presets) {
-    if (!ImGui::BeginTabItem(name)) return;
+static bool row_check(const char* label, bool* v) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    ImGui::SameLine(LABEL_W);
+    char id[96]; snprintf(id, sizeof(id), "##%s", label);
+    return ImGui::Checkbox(id, v);
+}
 
+static bool row_section(const char* title) {
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.72f, 0.60f, 0.95f, 1.0f));
+    bool open = ImGui::CollapsingHeader(title, ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor();
+    return open;
+}
+
+static bool oxygen_section(const char* label, bool default_open) {
+    const float R = 7.0f;
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 mn = ImGui::GetCursorScreenPos();
+    float w = ImGui::GetContentRegionAvail().x;
+    float h = ImGui::GetFrameHeight();
+    ImVec2 mx(mn.x + w, mn.y + h);
+    dl->AddRectFilled(mn, mx, IM_COL32(64, 112, 168, 255), R);
+    dl->AddRectFilledMultiColor(ImVec2(mn.x + 3, mn.y + 3), ImVec2(mx.x - 3, mn.y + h * 0.60f),
+                                IM_COL32(150,200,250,150), IM_COL32(150,200,250,150), IM_COL32(150,200,250,0), IM_COL32(150,200,250,0));
+    dl->AddRectFilledMultiColor(ImVec2(mn.x + 3, mn.y + h * 0.40f), ImVec2(mx.x - 3, mx.y - 3),
+                                IM_COL32(10,25,45,0), IM_COL32(10,25,45,0), IM_COL32(10,25,45,120), IM_COL32(10,25,45,120));
+    dl->AddRect(mn, mx, IM_COL32(150, 200, 250, 70), 1.0f, R);
+    ImGui::SetCursorScreenPos(mn);
+    bool open = ImGui::CollapsingHeader(label, default_open ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+    ImGui::PopStyleVar();
+    ImGui::Dummy(ImVec2(0, 3));
+    return open;
+}
+
+static void status_chip(const char* label, bool on) {
+    ImVec2 pad(9, 4);
+    ImVec2 ls = ImGui::CalcTextSize(label);
+    ImVec2 mn = ImGui::GetCursorScreenPos();
+    ImVec2 sz(ls.x + pad.x * 2, ls.y + pad.y * 2);
+    ImVec2 mx(mn.x + sz.x, mn.y + sz.y);
+    float r = sz.y * 0.5f;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(mn, mx, on ? IM_COL32(64, 158, 108, 235) : IM_COL32(255, 255, 255, 22), r);
+    if (on)
+        dl->AddRectFilledMultiColor(ImVec2(mn.x + 4, mn.y + 4), ImVec2(mx.x - 4, mn.y + sz.y * 0.55f),
+                                    IM_COL32(255,255,255,70), IM_COL32(255,255,255,70), IM_COL32(255,255,255,0), IM_COL32(255,255,255,0));
+    dl->AddRect(mn, mx, on ? IM_COL32(150, 230, 180, 140) : IM_COL32(255, 255, 255, 45), 1.0f, r);
+    dl->AddText(ImVec2(mn.x + pad.x, mn.y + pad.y),
+                on ? IM_COL32(232, 255, 242, 255) : IM_COL32(200, 212, 228, 150), label);
+    ImGui::Dummy(sz);
+}
+
+// Segmented control: rounded track + inset rounded pill for selection.
+// No corner flags anywhere, so no artifacts on first/last tab.
+static int g_tab = 0;
+static void segmented_tabs() {
+    static const char* names[] = { "Left", "Right", "General", "Macros", "Config", "Analytics" };
+    const int count = 6;
+    const float R = 7.0f;
+    const float pad_x = 14.0f;
+    const float h = ImGui::GetFrameHeight();
+
+    ImVec2 ls[count]; float w[count], total = 0.0f;
+    for (int i = 0; i < count; i++) {
+        ls[i] = ImGui::CalcTextSize(names[i]);
+        w[i] = ls[i].x + pad_x * 2.0f;
+        total += w[i];
+    }
+
+    ImVec2 mn = ImGui::GetCursorScreenPos();
+    ImVec2 mx(mn.x + total, mn.y + h);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    dl->AddRectFilled(mn, mx, IM_COL32(22, 36, 56, 210), R);
+    dl->AddRect(mn, mx, IM_COL32(150, 200, 250, 60), 1.0f, R);
+
+    float x = mn.x;
+    for (int i = 0; i < count; i++) {
+        ImGui::SetCursorScreenPos(ImVec2(x, mn.y));
+        bool sel = (g_tab == i);
+        ImVec2 s0(x, mn.y), s1(x + w[i], mn.y + h);
+        bool clicked = ImGui::InvisibleButton(names[i], ImVec2(w[i], h));
+        bool hov = ImGui::IsItemHovered();
+
+        ImVec2 i0(s0.x + 2, s0.y + 2), i1(s1.x - 2, s1.y - 2);
+        if (sel) {
+            dl->AddRectFilled(i0, i1, IM_COL32(86, 140, 200, 255), R - 2);
+            dl->AddRectFilledMultiColor(ImVec2(i0.x + 3, i0.y + 2), ImVec2(i1.x - 3, i0.y + (i1.y - i0.y) * 0.58f),
+                                        IM_COL32(255,255,255,80), IM_COL32(255,255,255,80), IM_COL32(255,255,255,0), IM_COL32(255,255,255,0));
+            dl->AddRect(i0, i1, IM_COL32(165, 208, 250, 110), 1.0f, R - 2);
+        } else if (hov) {
+            dl->AddRectFilled(i0, i1, IM_COL32(255, 255, 255, 18), R - 2);
+        }
+        if (i > 0 && !sel && g_tab != i - 1)
+            dl->AddLine(ImVec2(s0.x, s0.y + 5), ImVec2(s0.x, s1.y - 5), IM_COL32(255, 255, 255, 26), 1.0f);
+
+        dl->AddText(ImVec2(s0.x + (w[i] - ls[i].x) * 0.5f, s0.y + (h - ls[i].y) * 0.5f),
+                    sel ? IM_COL32(242, 249, 255, 255) : IM_COL32(202, 218, 238, 215), names[i]);
+        if (clicked) g_tab = i;
+        x += w[i];
+    }
+    ImGui::SetCursorScreenPos(ImVec2(mn.x, mx.y));
+    ImGui::Spacing();
+}
+
+static void draw_clicker_tab(ClickerProfile& profile, ActivationMode& mode,
+                             Clicker& clicker, int& key,
+                             const ClickerPreset* presets) {
+    if (clicker.is_enabled())
+        ImGui::TextColored(ImVec4(0.55f, 0.90f, 0.65f, 1.0f),
+                           "ACTIVE  -  %.1f avg CPS  -  %u clicks",
+                           clicker.tracker().avg_cps(), clicker.click_count());
+    else
+        ImGui::TextDisabled("Idle  -  press your toggle key to start");
     ImGui::Spacing();
 
-    keybind_button("Toggle Key", key);
+    if (oxygen_section("Quick Setup", true)) {
+        keybind_row("Toggle Key", key);
 
-    ImGui::Separator();
-    ImGui::Text("Presets");
-    for (int i = 0; i < PRESET_COUNT; i++) {
-        if (i > 0) ImGui::SameLine();
-        if (ImGui::Button(presets[i].name)) {
-            int saved_button = profile.mouse_button;
-            profile = presets[i].profile;
-            profile.mouse_button = saved_button;
+        ImGui::TextUnformatted("Preset");
+        const float sp = ImGui::GetStyle().ItemSpacing.x;
+        const float row_x = ImGui::GetCursorPosX();
+        const float content_w = ImGui::GetContentRegionAvail().x;
+        const float btn_h = ImGui::GetFrameHeight();
+        float line_y = ImGui::GetCursorPosY();
+        float x_used = 0.0f;
+        for (int i = 0; i < PRESET_COUNT; i++) {
+            ImVec2 pls = ImGui::CalcTextSize(presets[i].name, nullptr, true);
+            float bw = pls.x + ImGui::GetStyle().FramePadding.x * 2.0f;
+            if (i > 0) {
+                if (x_used + sp + bw > content_w) {
+                    line_y += btn_h + 4.0f;
+                    ImGui::SetCursorPos(ImVec2(row_x, line_y));
+                    x_used = 0.0f;
+                } else {
+                    ImGui::SameLine(); x_used += sp;
+                }
+            }
+            if (oxygen_button(presets[i].name)) {
+                int saved_button = profile.mouse_button;
+                profile = presets[i].profile;
+                profile.mouse_button = saved_button;
+            }
+            x_used += bw;
+        }
+        ImGui::SetCursorPosY(line_y + btn_h + ImGui::GetStyle().ItemSpacing.y);
+
+        int idx = mode == ActivationMode::TOGGLE ? 0 : (mode == ActivationMode::HOLD ? 1 : 2);
+        if (row_combo("Activation", &idx, "Toggle\0Hold\0Mouse\0"))
+            mode = idx == 0 ? ActivationMode::TOGGLE : (idx == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
+
+        row_slider("Speed (CPS)", &profile.cps_mean, 1.0, 25.0, "%.1f");
+    }
+
+    if (oxygen_section("Advanced Tuning", false)) {
+        row_slider("CPS Variation", &profile.cps_stddev, 0.0, 5.0, "%.2f");
+        row_slider("Min CPS", &profile.cps_min, 1.0, 20.0, "%.1f");
+        row_slider("Max CPS", &profile.cps_max, 5.0, 30.0, "%.1f");
+        int dist_idx = (int)profile.distribution;
+        if (row_combo("Distribution", &dist_idx, "Gaussian\0Poisson\0Uniform\0"))
+            profile.distribution = (DistributionType)dist_idx;
+
+        ImGui::Dummy(ImVec2(0, 4)); ImGui::TextDisabled("HUMANIZATION");
+        row_slider("Spike Chance", &profile.spike_chance, 0.0, 0.2, "%.3f");
+        if (profile.spike_chance > 0) {
+            row_slider("Spike Min", &profile.spike_min, 0.0, 5.0, "%.1f");
+            row_slider("Spike Max", &profile.spike_max, 0.0, 8.0, "%.1f");
+        }
+        row_slider("Stutter Chance", &profile.stutter_chance, 0.0, 0.2, "%.3f");
+        if (profile.stutter_chance > 0) {
+            row_slider("Stutter Min", &profile.stutter_min, 0.0, 8.0, "%.1f");
+            row_slider("Stutter Max", &profile.stutter_max, 0.0, 10.0, "%.1f");
+        }
+
+        ImGui::Dummy(ImVec2(0, 4)); ImGui::TextDisabled("HOLD TIMING");
+        row_slider("Hold Mean (ms)",   &profile.hold_ms_mean,   10.0, 100.0, "%.1f");
+        row_slider("Hold StdDev (ms)", &profile.hold_ms_stddev,  0.0,  20.0, "%.1f");
+        row_slider("Hold Min (ms)",    &profile.hold_ms_min,     5.0,  50.0, "%.1f");
+        row_slider("Hold Max (ms)",    &profile.hold_ms_max,    20.0, 150.0, "%.1f");
+        row_slider("Heavy Hold Chance", &profile.hold_ms_heavy_chance, 0.0, 0.1, "%.3f");
+        if (profile.hold_ms_heavy_chance > 0) {
+            row_slider("Heavy Hold Min", &profile.hold_ms_heavy_min, 5.0, 50.0, "%.1f");
+            row_slider("Heavy Hold Max", &profile.hold_ms_heavy_max, 10.0, 80.0, "%.1f");
+        }
+        row_slider("Rhythm Volatility", &profile.rhythm_volatility, 0.0, 2.0, "%.2f");
+        row_slider("Rhythm Tension",    &profile.rhythm_tension,    0.0, 0.2, "%.3f");
+        row_slider("CPS Fallout",       &profile.cps_minmax_fallout,0.0, 3.0, "%.2f");
+        row_slider("Start Delay (ms)",  &profile.start_delay_ms,    0.0, 500.0, "%.0f");
+
+        ImGui::Dummy(ImVec2(0, 4)); ImGui::TextDisabled("DOUBLE CLICK");
+        row_slider("Chance", &profile.double_click_chance, 0.0, 0.3, "%.3f");
+        if (profile.double_click_chance > 0) {
+            row_slider("Delay Min (ms)", &profile.double_click_delay_min,  5.0,  80.0, "%.0f");
+            row_slider("Delay Max (ms)", &profile.double_click_delay_max, 10.0, 120.0, "%.0f");
+        }
+
+        ImGui::Dummy(ImVec2(0, 4)); ImGui::TextDisabled("FATIGUE BREAKS");
+        row_check("Enable Breaks", &profile.breaks_enabled);
+        if (profile.breaks_enabled) {
+            row_slider("Break Every Min (s)",    &profile.break_interval_min,  5.0, 120.0, "%.1f");
+            row_slider("Break Every Max (s)",    &profile.break_interval_max,  5.0, 120.0, "%.1f");
+            row_slider("Break Duration Min (s)", &profile.break_duration_min,  0.1,   5.0, "%.1f");
+            row_slider("Break Duration Max (s)", &profile.break_duration_max,  0.1,   5.0, "%.1f");
         }
     }
-
-    ImGui::Separator();
-    ImGui::Text("Activation");
-    mode_combo("##mode", mode);
-
-    ImGui::Separator();
-    ImGui::Text("CPS");
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Ctrl+Click a slider to type a value directly.\nValues between 9.5 - 12.5 recommended for server-side AC bypass.");
-
-    ImGui::SliderScalar("Mean CPS", ImGuiDataType_Double, &profile.cps_mean, &(const double&){1.0}, &(const double&){25.0}, "%.1f");
-    ImGui::SliderScalar("Std Dev", ImGuiDataType_Double, &profile.cps_stddev, &(const double&){0.0}, &(const double&){5.0}, "%.2f");
-    ImGui::SliderScalar("Min CPS", ImGuiDataType_Double, &profile.cps_min, &(const double&){1.0}, &(const double&){20.0}, "%.1f");
-    ImGui::SliderScalar("Max CPS", ImGuiDataType_Double, &profile.cps_max, &(const double&){5.0}, &(const double&){30.0}, "%.1f");
-
-    {
-        int dist_idx = static_cast<int>(profile.distribution);
-        if (ImGui::Combo("Distribution", &dist_idx, "Gaussian\0Poisson\0Uniform\0"))
-            profile.distribution = static_cast<DistributionType>(dist_idx);
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Gaussian: bell curve around mean (default)\n"
-                              "Poisson: natural integer variance, stddev ignored\n"
-                              "Uniform: flat random between min/max CPS");
-        }
-    }
-
-    ImGui::Separator();
-    ImGui::Text("Humanization");
-
-    ImGui::SliderScalar("Spike Chance", ImGuiDataType_Double, &profile.spike_chance, &(const double&){0.0}, &(const double&){0.2}, "%.3f");
-    if (profile.spike_chance > 0) {
-        ImGui::SliderScalar("Spike Min", ImGuiDataType_Double, &profile.spike_min, &(const double&){0.0}, &(const double&){5.0}, "%.1f");
-        ImGui::SliderScalar("Spike Max", ImGuiDataType_Double, &profile.spike_max, &(const double&){0.0}, &(const double&){8.0}, "%.1f");
-    }
-
-    ImGui::SliderScalar("Stutter Chance", ImGuiDataType_Double, &profile.stutter_chance, &(const double&){0.0}, &(const double&){0.2}, "%.3f");
-    if (profile.stutter_chance > 0) {
-        ImGui::SliderScalar("Stutter Min", ImGuiDataType_Double, &profile.stutter_min, &(const double&){0.0}, &(const double&){8.0}, "%.1f");
-        ImGui::SliderScalar("Stutter Max", ImGuiDataType_Double, &profile.stutter_max, &(const double&){0.0}, &(const double&){10.0}, "%.1f");
-    }
-
-    ImGui::Separator();
-    ImGui::Text("Hold Timing");
-
-    ImGui::SliderScalar("Hold Mean (ms)", ImGuiDataType_Double, &profile.hold_ms_mean, &(const double&){10.0}, &(const double&){100.0}, "%.1f");
-    ImGui::SliderScalar("Hold StdDev (ms)", ImGuiDataType_Double, &profile.hold_ms_stddev, &(const double&){0.0}, &(const double&){20.0}, "%.1f");
-    ImGui::SliderScalar("Hold Min (ms)", ImGuiDataType_Double, &profile.hold_ms_min, &(const double&){5.0}, &(const double&){50.0}, "%.1f");
-    ImGui::SliderScalar("Hold Max (ms)", ImGuiDataType_Double, &profile.hold_ms_max, &(const double&){20.0}, &(const double&){150.0}, "%.1f");
-
-    ImGui::Checkbox("Advanced", &show_advanced);
-    if (show_advanced) {
-        ImGui::SliderScalar("Heavy Hold Chance", ImGuiDataType_Double, &profile.hold_ms_heavy_chance, &(const double&){0.0}, &(const double&){0.1}, "%.3f");
-        ImGui::SliderScalar("Heavy Hold Min", ImGuiDataType_Double, &profile.hold_ms_heavy_min, &(const double&){5.0}, &(const double&){50.0}, "%.1f");
-        ImGui::SliderScalar("Heavy Hold Max", ImGuiDataType_Double, &profile.hold_ms_heavy_max, &(const double&){10.0}, &(const double&){80.0}, "%.1f");
-        ImGui::SliderScalar("Rhythm Volatility", ImGuiDataType_Double, &profile.rhythm_volatility, &(const double&){0.0}, &(const double&){2.0}, "%.2f");
-        ImGui::SliderScalar("Rhythm Tension", ImGuiDataType_Double, &profile.rhythm_tension, &(const double&){0.0}, &(const double&){0.2}, "%.3f");
-        ImGui::SliderScalar("CPS Min/Max Fallout", ImGuiDataType_Double, &profile.cps_minmax_fallout, &(const double&){0.0}, &(const double&){3.0}, "%.2f");
-        ImGui::SliderScalar("Start Delay (ms)", ImGuiDataType_Double, &profile.start_delay_ms, &(const double&){0.0}, &(const double&){500.0}, "%.0f");
-    }
-
-    ImGui::Separator();
-    ImGui::Text("Double Click");
-    ImGui::SliderScalar("Chance##dbl", ImGuiDataType_Double, &profile.double_click_chance, &(const double&){0.0}, &(const double&){0.3}, "%.3f");
-    if (profile.double_click_chance > 0) {
-        ImGui::SliderScalar("Delay Min (ms)##dbl", ImGuiDataType_Double, &profile.double_click_delay_min, &(const double&){5.0}, &(const double&){80.0}, "%.0f");
-        ImGui::SliderScalar("Delay Max (ms)##dbl", ImGuiDataType_Double, &profile.double_click_delay_max, &(const double&){10.0}, &(const double&){120.0}, "%.0f");
-    }
-
-    ImGui::Separator();
-    ImGui::Text("Fatigue Breaks");
-    ImGui::Checkbox("Enable Breaks", &profile.breaks_enabled);
-    if (profile.breaks_enabled) {
-        ImGui::SliderScalar("Break Every Min (s)", ImGuiDataType_Double, &profile.break_interval_min, &(const double&){5.0}, &(const double&){120.0}, "%.0f");
-        ImGui::SliderScalar("Break Every Max (s)", ImGuiDataType_Double, &profile.break_interval_max, &(const double&){5.0}, &(const double&){120.0}, "%.0f");
-        ImGui::SliderScalar("Break Duration Min (s)", ImGuiDataType_Double, &profile.break_duration_min, &(const double&){0.1}, &(const double&){5.0}, "%.1f");
-        ImGui::SliderScalar("Break Duration Max (s)", ImGuiDataType_Double, &profile.break_duration_max, &(const double&){0.1}, &(const double&){5.0}, "%.1f");
-    }
-
-    ImGui::Separator();
-    const auto& t = clicker.tracker();
-    ImGui::Text("Status: %s", clicker.is_enabled() ? "ACTIVE" : "Idle");
-    ImGui::Text("Avg CPS: %.1f  |  Avg Hold: %.1f ms  |  Clicks: %u",
-                t.avg_cps(), t.avg_hold_ms(), clicker.click_count());
-
-    ImGui::EndTabItem();
 }
 
 void gui_run(GuiState& state) {
@@ -278,13 +476,14 @@ void gui_run(GuiState& state) {
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    GLFWwindow* window = glfwCreateWindow(620, 520, "Ghast Clicker", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(700, 600, "Ghast Clicker", nullptr, nullptr);
     if (!window) {
         fprintf(stderr, "Failed to create GLFW window\n");
         glfwTerminate();
         return;
     }
     g_window = window;
+    glfwSetWindowSizeLimits(window, 520, 420, GLFW_DONT_CARE, GLFW_DONT_CARE);
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
@@ -297,51 +496,75 @@ void gui_run(GuiState& state) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.IniFilename = nullptr;
 
+    // Real font instead of the pixelated embedded one
+    {
+        const char* candidates[] = {
+            "/usr/share/fonts/inter/Inter-Regular.otf",
+            "/usr/share/fonts/truetype/inter/Inter-Regular.otf",
+            "/usr/share/fonts/roboto/Roboto-Regular.ttf",
+            "/usr/share/fonts/truetype/roboto/Roboto-Regular.ttf",
+            "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+            "/usr/share/fonts/cantarell/Cantarell-VF.otf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        };
+        ImFont* font = nullptr;
+        for (const char* p : candidates) {
+            if (FILE* f = fopen(p, "rb")) { fclose(f); font = io.Fonts->AddFontFromFileTTF(p, 16.0f); break; }
+        }
+        if (!font) io.Fonts->AddFontDefault();
+    }
+
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 0.0f;
-    style.FrameRounding = 3.0f;
-    style.GrabRounding = 5.0f;
-    style.GrabMinSize = 10.0f;
-    style.ScrollbarSize = 10.0f;
-    style.TabRounding = 3.0f;
+    style.WindowPadding    = ImVec2(14, 12);
+    style.FramePadding     = ImVec2(10, 5);
+    style.ItemSpacing      = ImVec2(8, 7);
+    style.ItemInnerSpacing = ImVec2(6, 4);
+    style.WindowRounding   = 10.0f; style.ChildRounding   = 8.0f;
+    style.FrameRounding    = 7.0f;  style.PopupRounding   = 7.0f;
+    style.ScrollbarRounding= 8.0f;  style.GrabRounding    = 6.0f;
+    style.FrameBorderSize  = 1.0f;
+    style.PopupBorderSize  = 1.0f;
+    style.TabRounding      = 6.0f;
     style.WindowBorderSize = 0.0f;
 
-    auto* colors = style.Colors;
-    ImVec4 accent{0.45f, 0.28f, 0.62f, 1.0f};
-    ImVec4 accent_hover{0.55f, 0.38f, 0.72f, 1.0f};
-    ImVec4 accent_active{0.65f, 0.48f, 0.82f, 1.0f};
-
-    colors[ImGuiCol_WindowBg]       = ImVec4(0.08f, 0.08f, 0.08f, 0.96f);
-    colors[ImGuiCol_PopupBg]        = ImVec4(0.08f, 0.08f, 0.08f, 0.96f);
-    colors[ImGuiCol_Border]         = accent;
-    colors[ImGuiCol_FrameBg]        = ImVec4(0.14f, 0.14f, 0.14f, 0.54f);
-    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.19f, 0.19f, 0.19f, 0.54f);
-    colors[ImGuiCol_FrameBgActive]  = ImVec4(0.26f, 0.26f, 0.26f, 0.54f);
-    colors[ImGuiCol_TitleBg]        = ImVec4(0.06f, 0.06f, 0.06f, 1.0f);
-    colors[ImGuiCol_TitleBgActive]  = accent;
-    colors[ImGuiCol_ScrollbarBg]    = ImVec4(0.08f, 0.08f, 0.08f, 0.94f);
-    colors[ImGuiCol_ScrollbarGrab]  = accent;
-    colors[ImGuiCol_CheckMark]      = accent;
-    colors[ImGuiCol_SliderGrab]     = accent;
-    colors[ImGuiCol_SliderGrabActive] = accent_active;
-    colors[ImGuiCol_Button]         = accent;
-    colors[ImGuiCol_ButtonHovered]  = accent_hover;
-    colors[ImGuiCol_ButtonActive]   = accent_active;
-    colors[ImGuiCol_Header]         = accent;
-    colors[ImGuiCol_HeaderHovered]  = accent_hover;
-    colors[ImGuiCol_HeaderActive]   = accent_active;
-    colors[ImGuiCol_Separator]      = accent;
-    colors[ImGuiCol_Tab]            = accent;
-    colors[ImGuiCol_TabHovered]     = accent_hover;
-    colors[ImGuiCol_TabActive]      = accent_active;
-    colors[ImGuiCol_TextSelectedBg] = accent;
+    ImVec4* colors = style.Colors;
+    ImVec4 accent      {0.24f, 0.49f, 0.78f, 1.0f};   // Oxygen steel blue
+    ImVec4 accent_hover{0.33f, 0.58f, 0.86f, 1.0f};
+    ImVec4 accent_act  {0.17f, 0.37f, 0.62f, 1.0f};
+    colors[ImGuiCol_Text]            = ImVec4(0.90f, 0.95f, 1.00f, 1.0f);
+    colors[ImGuiCol_TextDisabled]    = ImVec4(0.62f, 0.70f, 0.80f, 1.0f);
+    colors[ImGuiCol_WindowBg]        = ImVec4(0, 0, 0, 0);
+    colors[ImGuiCol_ChildBg]         = ImVec4(0, 0, 0, 0);
+    colors[ImGuiCol_PopupBg]         = ImVec4(0.09f, 0.14f, 0.20f, 0.98f);
+    colors[ImGuiCol_FrameBg]         = ImVec4(0.04f, 0.09f, 0.16f, 0.45f);
+    colors[ImGuiCol_FrameBgHovered]  = ImVec4(0.09f, 0.17f, 0.27f, 0.60f);
+    colors[ImGuiCol_FrameBgActive]   = ImVec4(0.13f, 0.23f, 0.35f, 0.75f);
+    colors[ImGuiCol_TitleBg]         = ImVec4(0.10f, 0.16f, 0.24f, 1.0f);
+    colors[ImGuiCol_TitleBgActive]   = accent_act;
+    colors[ImGuiCol_MenuBarBg]       = colors[ImGuiCol_FrameBg];
+    colors[ImGuiCol_ScrollbarBg]     = ImVec4(0, 0, 0, 0);
+    colors[ImGuiCol_ScrollbarGrab]   = ImVec4(0.35f, 0.55f, 0.80f, 0.60f);
+    colors[ImGuiCol_CheckMark]       = ImVec4(0.75f, 0.90f, 1.00f, 1.0f);
+    colors[ImGuiCol_SliderGrab]       = ImVec4(0, 0, 0, 0);  // hidden; oxygen thumb drawn manually
+    colors[ImGuiCol_SliderGrabActive] = ImVec4(0, 0, 0, 0);
+    colors[ImGuiCol_Button]          = ImVec4(0.16f, 0.34f, 0.56f, 1.0f);
+    colors[ImGuiCol_ButtonHovered]   = ImVec4(0.24f, 0.46f, 0.72f, 1.0f);
+    colors[ImGuiCol_ButtonActive]    = ImVec4(0.12f, 0.26f, 0.44f, 1.0f);
+    colors[ImGuiCol_Border]          = ImVec4(0.60f, 0.78f, 0.96f, 0.16f);
+    colors[ImGuiCol_Header]          = ImVec4(0, 0, 0, 0);
+    colors[ImGuiCol_HeaderHovered]   = ImVec4(1, 1, 1, 0.08f);
+    colors[ImGuiCol_HeaderActive]    = ImVec4(1, 1, 1, 0.14f);
+    colors[ImGuiCol_Separator]       = ImVec4(1.0f, 1.0f, 1.0f, 0.12f);
+    colors[ImGuiCol_Tab]             = ImVec4(0.10f, 0.16f, 0.24f, 1.0f);
+    colors[ImGuiCol_TabHovered]      = accent_hover;
+    colors[ImGuiCol_TabActive]       = accent;
+    colors[ImGuiCol_TextSelectedBg]  = ImVec4(0.33f, 0.58f, 0.86f, 0.35f);
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
-
-    bool show_advanced_left = false;
-    bool show_advanced_right = false;
 
     // Config profile state
     static char profile_name_buf[64] = "";
@@ -384,6 +607,11 @@ void gui_run(GuiState& state) {
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
 
+        ImGui::GetBackgroundDrawList()->AddRectFilledMultiColor(
+            ImVec2(0, 0), ImVec2((float)display_w, (float)display_h),
+            IM_COL32(42, 60, 82, 255),  IM_COL32(42, 60, 82, 255),   // top: slate blue
+            IM_COL32(14, 22, 32, 255),  IM_COL32(14, 22, 32, 255));  // bottom: deep navy
+
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2((float)display_w, (float)display_h));
 
@@ -391,38 +619,33 @@ void gui_run(GuiState& state) {
                               ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
 
         if (ImGui::Begin("Ghast Clicker", nullptr, wf)) {
-            ImGui::Text("Ghast Clicker");
-            ImGui::SameLine(ImGui::GetWindowWidth() - 310);
-
-            if (ImGui::SmallButton(always_on_top ? "[pinned]" : "[pin]")) {
+            bool l_on = state.left.is_enabled() || state.left_armed;
+            bool r_on = state.right.is_enabled() || state.right_armed;
+            status_chip(l_on ? "L: ON" : "L: off", l_on);
+            ImGui::SameLine(0, 6);
+            status_chip(r_on ? "R: ON" : "R: off", r_on);
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 70.0f);
+            if (oxygen_button(always_on_top ? "pinned" : "pin", ImVec2(70, 0))) {
                 always_on_top = !always_on_top;
                 glfwSetWindowAttrib(window, GLFW_FLOATING, always_on_top ? GLFW_TRUE : GLFW_FALSE);
             }
-            ImGui::SameLine();
-
-            if (state.left.is_enabled())
-                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "L: ACTIVE");
-            else
-                ImGui::TextDisabled("L: ---");
-            ImGui::SameLine();
-            if (state.right.is_enabled())
-                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "R: ACTIVE");
-            else
-                ImGui::TextDisabled("R: ---");
-            ImGui::SameLine();
-            if (state.in_menu)
-                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "[INV]");
-
+            ImGui::Spacing();
+            segmented_tabs();
             ImGui::Separator();
 
-            if (ImGui::BeginTabBar("##tabs")) {
-                clicker_tab("Left Clicker", state.config.left, state.config.left_mode,
-                            state.left, state.config.key_left, show_advanced_left, LEFT_PRESETS);
+            switch (g_tab) {
+                case 0:
+                    draw_clicker_tab(state.config.left, state.config.left_mode,
+                                     state.left, state.config.key_left, LEFT_PRESETS);
+                    break;
 
-                clicker_tab("Right Clicker", state.config.right, state.config.right_mode,
-                            state.right, state.config.key_right, show_advanced_right, RIGHT_PRESETS);
+                case 1:
+                    draw_clicker_tab(state.config.right, state.config.right_mode,
+                                     state.right, state.config.key_right, RIGHT_PRESETS);
+                    break;
 
-                if (ImGui::BeginTabItem("General")) {
+                case 2: {
                     ImGui::Spacing();
 
                     ImGui::Text("Keybinds");
@@ -458,7 +681,7 @@ void gui_run(GuiState& state) {
                     ImGui::Spacing();
                     ImGui::Separator();
                     ImGui::Text("Audio");
-                    ImGui::Checkbox("Toggle Sound", &state.config.audio_enabled);
+    ImGui::Checkbox("Toggle Sound", &state.config.audio_enabled);
                     if (ImGui::IsItemHovered())
                         ImGui::SetTooltip("Play a beep when clickers toggle on/off");
 
@@ -511,11 +734,10 @@ void gui_run(GuiState& state) {
                     ImGui::Spacing();
                     ImGui::Separator();
                     ImGui::TextDisabled("Ghast Clicker - Linux/Wayland Port");
-
-                    ImGui::EndTabItem();
+                    break;
                 }
 
-                if (ImGui::BeginTabItem("Macros")) {
+                case 3: {
                     ImGui::Spacing();
                     ImGui::Text("Macro Sequences");
                     ImGui::Separator();
@@ -548,7 +770,7 @@ void gui_run(GuiState& state) {
 
                         int action_idx = static_cast<int>(step.action);
                         ImGui::SetNextItemWidth(120);
-                        if (ImGui::Combo("##action", &action_idx, "Left Click\0Right Click\0Delay\0Switch Slot\0"))
+                        if (combo_framed("##action", &action_idx, "Left Click\0Right Click\0Delay\0Switch Slot\0"))
                             step.action = static_cast<MacroAction>(action_idx);
 
                         ImGui::SameLine();
@@ -609,11 +831,10 @@ void gui_run(GuiState& state) {
                                 state.macro_runner.start(mac, &state.active_slot);
                         }
                     }
-
-                    ImGui::EndTabItem();
+                    break;
                 }
 
-                if (ImGui::BeginTabItem("Config")) {
+                case 4: {
                     ImGui::Spacing();
                     ImGui::Text("Config Profiles");
                     ImGui::Separator();
@@ -663,11 +884,10 @@ void gui_run(GuiState& state) {
                         ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", status_msg);
                         status_timer -= io.DeltaTime;
                     }
-
-                    ImGui::EndTabItem();
+                    break;
                 }
 
-                if (ImGui::BeginTabItem("Analytics")) {
+                case 5: {
                     ImGui::Spacing();
                     ImGui::Text("Click Analytics");
                     ImGui::Separator();
@@ -740,18 +960,15 @@ void gui_run(GuiState& state) {
                     if (status_timer > 0) {
                         ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", status_msg);
                     }
-
-                    ImGui::EndTabItem();
+                    break;
                 }
-
-                ImGui::EndTabBar();
             }
         }
         ImGui::End();
 
         ImGui::Render();
         glViewport(0, 0, display_w, display_h);
-        glClearColor(0.06f, 0.06f, 0.06f, 1.0f);
+        glClearColor(0.055f, 0.086f, 0.125f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
