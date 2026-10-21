@@ -4,6 +4,7 @@
 enum class ActivationMode { TOGGLE, HOLD, MOUSE };
 enum class DistributionType { GAUSSIAN, POISSON, UNIFORM };
 enum class MacroAction { LEFT_CLICK, RIGHT_CLICK, DELAY, SWITCH_SLOT };
+enum class SprintResetMode { W_TAP, S_TAP, SHIFT_TAP };
 
 struct ClickerProfile {
     double cps_mean = 13.0;
@@ -143,6 +144,43 @@ struct Macro {
     int key_bind = 0;
 };
 
+// Ghast Clicker can't see game packets, so both modules fire off your own
+// left clicks (real or generated) and use a cooldown in place of upstream's
+// hit confirmation.
+struct JumpResetProfile {
+    double chance = 0.85;
+    double delay_ms_mean = 15.0;
+    double delay_ms_stddev = 10.0;
+    double delay_ms_min = 5.0;
+    double delay_ms_max = 50.0;
+
+    double hold_ms_mean = 75.0;
+    double hold_ms_stddev = 15.0;
+    double hold_ms_min = 50.0;
+    double hold_ms_max = 100.0;
+
+    double cooldown_ms = 600.0;
+    bool forward_only = true;
+    bool allow_in_menu = false;
+    bool use_slot_filter = true;
+};
+
+struct SprintResetProfile {
+    SprintResetMode mode = SprintResetMode::W_TAP;
+    double chance = 1.0;
+    double delay_ms_min = 0.0;
+    double delay_ms_max = 0.0;
+
+    double duration_ticks_mean = 1.0;
+    double duration_ticks_stddev = 0.35;
+    double duration_ticks_min = 1.0;
+    double duration_ticks_max = 2.0;
+
+    double cooldown_ms = 450.0;
+    bool forward_only = true;
+    bool use_slot_filter = true;
+};
+
 struct Config {
     ClickerProfile left;
     ClickerProfile right;
@@ -154,6 +192,11 @@ struct Config {
     int key_right = KEY_F7;
     int key_inventory = KEY_E;
     int key_escape = KEY_ESC;
+    int key_jump_reset = KEY_F9;
+    int key_sprint_reset = KEY_F10;
+
+    JumpResetProfile jump_reset;
+    SprintResetProfile sprint_reset;
 
     bool slot_filter_enabled = false;
     bool allowed_slots[9] = {true, false, false, false, false, false, false, false, false};

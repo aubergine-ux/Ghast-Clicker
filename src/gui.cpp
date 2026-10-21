@@ -7,6 +7,7 @@
 #include <ctime>
 #include <chrono>
 #include <linux/input-event-codes.h>
+#include <string>
 
 static const char* key_name(int code) {
     static char buf[32];
@@ -91,32 +92,113 @@ static void key_callback(GLFWwindow*, int key, int, int action, int) {
     g_binding_target = nullptr;
 }
 
-static void keybind_button(const char* label, int& key_code) {
+static const ImVec4 COLOR_ON{0.3f, 1.0f, 0.3f, 1.0f};
+static const ImVec4 COLOR_ARMED{1.0f, 0.8f, 0.3f, 1.0f};
+static const ImVec4 COLOR_WARN{1.0f, 0.6f, 0.2f, 1.0f};
+static const ImVec4 COLOR_ERROR{1.0f, 0.35f, 0.35f, 1.0f};
+
+static void tooltip(const char* text) {
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", text);
+}
+
+// Grey "(?)" that explains the item before it.
+static void help_marker(const char* text) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    tooltip(text);
+}
+
+static void section(const char* title) {
+    ImGui::Spacing();
+    ImGui::Text("%s", title);
+    ImGui::Separator();
+}
+
+static bool slider(const char* label, double& v, double lo, double hi, const char* fmt,
+                   const char* tip = nullptr) {
+    bool changed = ImGui::SliderScalar(label, ImGuiDataType_Double, &v, &lo, &hi, fmt);
+    if (tip) tooltip(tip);
+    return changed;
+}
+
+// Stored as 0..1, shown as a percentage.
+static void chance_slider(const char* label, double& v, const char* tip) {
+    double pct = v * 100.0;
+    if (slider(label, pct, 0.0, 100.0, "%.0f%%", tip))
+        v = pct / 100.0;
+}
+
+static void keybind_input(const char* id, int& key_code, float width = 150) {
     char buf[64];
     if (g_binding_target == &key_code) {
-        snprintf(buf, sizeof(buf), "Press a key...##%s", label);
+        snprintf(buf, sizeof(buf), "Press a key...##%s", id);
     } else if (key_code == 0) {
-        snprintf(buf, sizeof(buf), "Click to bind##%s", label);
+        snprintf(buf, sizeof(buf), "Click to bind##%s", id);
     } else {
-        snprintf(buf, sizeof(buf), "%s##%s", key_name(key_code), label);
+        snprintf(buf, sizeof(buf), "%s##%s", key_name(key_code), id);
     }
 
-    if (ImGui::Button(buf, ImVec2(150, 0))) {
+    if (ImGui::Button(buf, ImVec2(width, 0))) {
         g_binding_target = &key_code;
     }
+    tooltip("Click, then press the key you want. Escape clears it.");
+}
+
+static void keybind_button(const char* label, int& key_code) {
+    keybind_input(label, key_code);
     ImGui::SameLine();
     ImGui::Text("%s", label);
 }
+
+static const char* MODE_HELP =
+    "Toggle: press the key to start, press again to stop.\n"
+    "Hold: clicks only while the key is held.\n"
+    "Mouse: the key arms the clicker, then holding your real\n"
+    "mouse button auto-clicks. Best for PvP.";
 
 static void mode_combo(const char* label, ActivationMode& mode) {
     int idx = mode == ActivationMode::TOGGLE ? 0 : (mode == ActivationMode::HOLD ? 1 : 2);
     if (ImGui::Combo(label, &idx, "Toggle\0Hold\0Mouse\0")) {
         mode = idx == 0 ? ActivationMode::TOGGLE : (idx == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
     }
+    tooltip(MODE_HELP);
+}
+
+static void clicker_status(const Clicker& clicker, ActivationMode mode, bool armed) {
+    if (clicker.is_enabled())
+        ImGui::TextColored(COLOR_ON, "CLICKING");
+    else if (mode == ActivationMode::MOUSE && armed)
+        ImGui::TextColored(COLOR_ARMED, "ARMED");
+    else
+        ImGui::TextDisabled("Off");
+}
+
+template <typename Set>
+static void module_checkbox(const char* label, bool on, Set&& set) {
+    bool v = on;
+    if (ImGui::Checkbox(label, &v)) set(v);
+}
+
+static void combat_status(bool enabled, bool busy) {
+    if (busy)
+        ImGui::TextColored(COLOR_ARMED, "FIRING");
+    else if (enabled)
+        ImGui::TextColored(COLOR_ON, "ON");
+    else
+        ImGui::TextDisabled("Off");
+}
+
+static void keyboard_grab_status(GuiState& state) {
+    if (!state.combat.sprint.needs_keyboard_grab()) return;
+    if (state.combat.keyboard.forwarding())
+        ImGui::TextColored(COLOR_ON, "Keyboard grabbed - W-Tap ready");
+    else
+        ImGui::TextColored(COLOR_WARN, "Release all keys to finish grabbing the keyboard for W-Tap");
 }
 
 static void clicker_tab(const char* name, ClickerProfile& profile, ActivationMode& mode,
-                         Clicker& clicker, int& key, bool& show_advanced,
+                         Clicker& clicker, int& key, bool& show_advanced, bool armed,
                          const ClickerPreset* presets) {
     if (!ImGui::BeginTabItem(name)) return;
 
@@ -124,8 +206,12 @@ static void clicker_tab(const char* name, ClickerProfile& profile, ActivationMod
 
     keybind_button("Toggle Key", key);
 
+    ImGui::SameLine();
+    clicker_status(clicker, mode, armed);
+
     ImGui::Separator();
     ImGui::Text("Presets");
+    help_marker("One click sets every slider below. Fine-tune afterwards if you like.");
     for (int i = 0; i < PRESET_COUNT; i++) {
         if (i > 0) ImGui::SameLine();
         if (ImGui::Button(presets[i].name)) {
@@ -137,6 +223,7 @@ static void clicker_tab(const char* name, ClickerProfile& profile, ActivationMod
 
     ImGui::Separator();
     ImGui::Text("Activation");
+    help_marker(MODE_HELP);
     mode_combo("##mode", mode);
 
     ImGui::Separator();
@@ -221,10 +308,209 @@ static void clicker_tab(const char* name, ClickerProfile& profile, ActivationMod
     ImGui::EndTabItem();
 }
 
-void gui_run(GuiState& state) {
+static void home_tab(GuiState& state) {
+    if (!ImGui::BeginTabItem("Home")) return;
+    ImGui::Spacing();
+
+    auto& cfg = state.config;
+    auto& combat = state.combat;
+
+    ImGui::TextWrapped("Hotkeys work anywhere: switch to your game and press them. "
+                       "Click a key button below to rebind it.");
+    ImGui::Spacing();
+
+    ImGuiTableFlags tf = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                         ImGuiTableFlags_SizingStretchProp;
+    if (ImGui::BeginTable("##modules", 4, tf)) {
+        ImGui::TableSetupColumn("Module", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("Hotkey", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+        ImGui::TableSetupColumn("Mode", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+        ImGui::TableHeadersRow();
+
+        auto clicker_row = [&](const char* name, const char* id, Clicker& c, int& key,
+                               ActivationMode& mode, bool armed) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("%s", name);
+            ImGui::TableNextColumn();
+            keybind_input(id, key, -1);
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-1);
+            char combo_id[32];
+            snprintf(combo_id, sizeof(combo_id), "##mode_%s", id);
+            mode_combo(combo_id, mode);
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            clicker_status(c, mode, armed);
+        };
+
+        clicker_row("Left Clicker", "home_left", state.left, cfg.key_left, cfg.left_mode, state.left_armed);
+        clicker_row("Right Clicker", "home_right", state.right, cfg.key_right, cfg.right_mode, state.right_armed);
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        module_checkbox("Jump Reset##home", combat.jump.is_enabled(),
+                        [&](bool v) { combat.jump.set_enabled(v); });
+        ImGui::TableNextColumn();
+        keybind_input("home_jump", cfg.key_jump_reset, -1);
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Jumps after you hit");
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        combat_status(combat.jump.is_enabled(), combat.jump.busy());
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        module_checkbox("Sprint Reset##home", combat.sprint.is_enabled(),
+                        [&](bool v) { combat.sprint.set_enabled(v); });
+        ImGui::TableNextColumn();
+        keybind_input("home_sprint", cfg.key_sprint_reset, -1);
+        ImGui::TableNextColumn();
+        {
+            int m = static_cast<int>(cfg.sprint_reset.mode);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::Combo("##home_sprint_mode", &m, "W-Tap\0S-Tap\0Shift-Tap\0"))
+                cfg.sprint_reset.mode = static_cast<SprintResetMode>(m);
+        }
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        combat_status(combat.sprint.is_enabled(), combat.sprint.busy());
+
+        ImGui::EndTable();
+    }
+    keyboard_grab_status(state);
+
+    ImGui::Spacing();
+    if (ImGui::CollapsingHeader("Quick start", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::BulletText("Pick a preset on the Left / Right tab (or keep the defaults).");
+        ImGui::BulletText("Choose a mode. Mouse mode is the most natural for PvP:");
+        ImGui::Indent();
+        ImGui::TextDisabled("press the hotkey once to arm, then just hold your mouse button.");
+        ImGui::Unindent();
+        ImGui::BulletText("Turn on Jump Reset / Sprint Reset here or with their hotkeys.");
+        ImGui::BulletText("Inventory key (%s) pauses everything while your inventory is open.",
+                          key_name(cfg.key_inventory));
+        ImGui::BulletText("Settings save automatically when you close the window.");
+    }
+
+    ImGui::EndTabItem();
+}
+
+static void combat_tab(GuiState& state) {
+    if (!ImGui::BeginTabItem("Combat")) return;
+    ImGui::Spacing();
+
+    auto& combat = state.combat;
+    auto& jr = state.config.jump_reset;
+    auto& sr = state.config.sprint_reset;
+
+    ImGui::TextWrapped("Both modules react to your own left clicks, real or auto-clicked. "
+                       "Ghast Clicker can't see game packets, so a cooldown stands in for "
+                       "hit detection: at most one reset per cooldown window.");
+    ImGui::Spacing();
+
+    if (ImGui::CollapsingHeader("Jump Reset", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::PushID("jr");
+        module_checkbox("Enabled", combat.jump.is_enabled(),
+                        [&](bool v) { combat.jump.set_enabled(v); });
+        ImGui::SameLine(160);
+        keybind_input("jr_key", state.config.key_jump_reset, 120);
+        ImGui::SameLine();
+        combat_status(combat.jump.is_enabled(), combat.jump.busy());
+        ImGui::TextDisabled("Taps Space right after you attack, so you jump as the return hit lands "
+                            "and take less knockback.");
+
+        section("Timing");
+        chance_slider("Chance", jr.chance, "How often a hit window triggers a jump.");
+        slider("Delay Mean (ms)", jr.delay_ms_mean, 0, 150, "%.0f", "Average reaction time after your click.");
+        slider("Delay StdDev (ms)", jr.delay_ms_stddev, 0, 50, "%.1f");
+        slider("Delay Min (ms)", jr.delay_ms_min, 0, 150, "%.0f");
+        slider("Delay Max (ms)", jr.delay_ms_max, 0, 250, "%.0f");
+        slider("Hold Mean (ms)", jr.hold_ms_mean, 30, 200, "%.0f", "How long Space stays down.");
+        slider("Hold StdDev (ms)", jr.hold_ms_stddev, 0, 50, "%.1f");
+        slider("Hold Min (ms)", jr.hold_ms_min, 30, 200, "%.0f");
+        slider("Hold Max (ms)", jr.hold_ms_max, 30, 250, "%.0f");
+        slider("Cooldown (ms)", jr.cooldown_ms, 200, 1500, "%.0f",
+               "Minimum time between jumps. A jump lasts ~600ms, so lower values can\n"
+               "fire while you're still airborne.");
+
+        section("Filters");
+        ImGui::Checkbox("Only while holding W", &jr.forward_only);
+        ImGui::Checkbox("Allow while inventory is open", &jr.allow_in_menu);
+        ImGui::Checkbox("Respect hotbar slot filter", &jr.use_slot_filter);
+        tooltip("Uses the slot filter from the General tab (when enabled there).");
+
+        const auto& log = combat.jump.log();
+        ImGui::Text("Jumps: %u / %u decisions  |  Avg delay: %.1f ms  |  Avg hold: %.1f ms",
+                    log.count(ResetOutcome::TRIGGERED), log.decisions(),
+                    log.avg_delay_ms(), log.avg_hold_ms());
+        if (ImGui::SmallButton("Reset to defaults")) jr = JumpResetProfile{};
+        ImGui::PopID();
+    }
+
+    ImGui::Spacing();
+    if (ImGui::CollapsingHeader("Sprint Reset", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::PushID("sr");
+        module_checkbox("Enabled", combat.sprint.is_enabled(),
+                        [&](bool v) { combat.sprint.set_enabled(v); });
+        ImGui::SameLine(160);
+        keybind_input("sr_key", state.config.key_sprint_reset, 120);
+        ImGui::SameLine();
+        combat_status(combat.sprint.is_enabled(), combat.sprint.busy());
+        ImGui::TextDisabled("Breaks sprint for a tick or two after you attack so your next hit "
+                            "deals full sprint knockback.");
+
+        int m = static_cast<int>(sr.mode);
+        if (ImGui::Combo("Mode", &m, "W-Tap\0S-Tap\0Shift-Tap\0"))
+            sr.mode = static_cast<SprintResetMode>(m);
+        tooltip("W-Tap: briefly releases W (grabs your keyboard while on).\n"
+                "S-Tap: briefly presses S.\n"
+                "Shift-Tap: briefly presses Shift.");
+        keyboard_grab_status(state);
+
+        section("Timing");
+        chance_slider("Chance", sr.chance, "How often a hit window triggers a reset.");
+        slider("Delay Min (ms)", sr.delay_ms_min, 0, 500, "%.0f", "Random wait after your click before the tap.");
+        slider("Delay Max (ms)", sr.delay_ms_max, 0, 500, "%.0f");
+        slider("Duration Mean (ticks)", sr.duration_ticks_mean, 1, 3, "%.2f",
+               "1 tick = 50ms. Fractional means mix whole-tick taps to hit the average.");
+        slider("Duration StdDev (ticks)", sr.duration_ticks_stddev, 0, 1, "%.2f");
+        slider("Duration Min (ticks)", sr.duration_ticks_min, 1, 3, "%.0f");
+        slider("Duration Max (ticks)", sr.duration_ticks_max, 1, 3, "%.0f");
+        slider("Cooldown (ms)", sr.cooldown_ms, 200, 1500, "%.0f",
+               "Minimum time between resets. Players can only take a hit every 500ms.");
+
+        section("Filters");
+        if (sr.mode == SprintResetMode::W_TAP) {
+            ImGui::BeginDisabled();
+            bool always = true;
+            ImGui::Checkbox("Only while holding W", &always);
+            ImGui::EndDisabled();
+            tooltip("W-Tap always needs W held.");
+        } else {
+            ImGui::Checkbox("Only while holding W", &sr.forward_only);
+        }
+        ImGui::Checkbox("Respect hotbar slot filter", &sr.use_slot_filter);
+        tooltip("Uses the slot filter from the General tab (when enabled there).");
+
+        const auto& log = combat.sprint.log();
+        ImGui::Text("Resets: %u / %u decisions  |  Avg delay: %.1f ms  |  Avg length: %.1f ms",
+                    log.count(ResetOutcome::TRIGGERED), log.decisions(),
+                    log.avg_delay_ms(), log.avg_hold_ms());
+        if (ImGui::SmallButton("Reset to defaults")) sr = SprintResetProfile{};
+        ImGui::PopID();
+    }
+
+    ImGui::EndTabItem();
+}
+
+static GLFWwindow* create_window(int w, int h) {
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
-        return;
+        return nullptr;
     }
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -232,11 +518,11 @@ void gui_run(GuiState& state) {
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    GLFWwindow* window = glfwCreateWindow(620, 520, "Ghast Clicker", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(w, h, "Ghast Clicker", nullptr, nullptr);
     if (!window) {
         fprintf(stderr, "Failed to create GLFW window\n");
         glfwTerminate();
-        return;
+        return nullptr;
     }
     g_window = window;
 
@@ -292,6 +578,110 @@ void gui_run(GuiState& state) {
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
+    return window;
+}
+
+static void destroy_window(GLFWwindow* window) {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    glfwDestroyWindow(window);
+    glfwTerminate();
+}
+
+// Drag the undecorated window by its top 30px.
+struct WindowDrag {
+    bool dragging = false;
+    double start_x = 0, start_y = 0;
+    int win_x = 0, win_y = 0;
+
+    void update(GLFWwindow* window) {
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            double mx, my;
+            glfwGetCursorPos(window, &mx, &my);
+            if (!dragging && my < 30.0 && !ImGui::IsAnyItemActive()) {
+                dragging = true;
+                start_x = mx;
+                start_y = my;
+                glfwGetWindowPos(window, &win_x, &win_y);
+            }
+            if (dragging)
+                glfwSetWindowPos(window, win_x + (int)(mx - start_x), win_y + (int)(my - start_y));
+        } else {
+            dragging = false;
+        }
+    }
+};
+
+static void begin_frame(GLFWwindow* window, int& display_w, int& display_h) {
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    glfwGetFramebufferSize(window, &display_w, &display_h);
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2((float)display_w, (float)display_h));
+}
+
+static void end_frame(GLFWwindow* window, int display_w, int display_h) {
+    ImGui::Render();
+    glViewport(0, 0, display_w, display_h);
+    glClearColor(0.06f, 0.06f, 0.06f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    glfwSwapBuffers(window);
+}
+
+static const ImGuiWindowFlags MAIN_WINDOW_FLAGS =
+    ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
+
+void gui_show_setup_error(const char* error) {
+    GLFWwindow* window = create_window(560, 360);
+    if (!window) return;
+
+    WindowDrag drag;
+    bool copied = false;
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+        drag.update(window);
+
+        int w, h;
+        begin_frame(window, w, h);
+        if (ImGui::Begin("Ghast Clicker", nullptr, MAIN_WINDOW_FLAGS)) {
+            ImGui::Text("Ghast Clicker");
+            ImGui::Separator();
+            ImGui::TextColored(COLOR_ERROR, "Setup needed");
+            ImGui::Spacing();
+            ImGui::TextWrapped("%s", error);
+            ImGui::Spacing();
+            if (ImGui::Button("Copy fix commands", ImVec2(160, 0))) {
+                ImGui::SetClipboardText(
+                    "sudo usermod -aG input $USER\n"
+                    "sudo cp 99-ghast-clicker.rules /etc/udev/rules.d/\n"
+                    "sudo udevadm control --reload-rules && sudo udevadm trigger\n"
+                    "sudo modprobe uinput\n");
+                copied = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Quit", ImVec2(80, 0)))
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            if (copied) {
+                ImGui::SameLine();
+                ImGui::TextColored(COLOR_ON, "Copied!");
+            }
+        }
+        ImGui::End();
+        end_frame(window, w, h);
+    }
+
+    destroy_window(window);
+}
+
+void gui_run(GuiState& state) {
+    GLFWwindow* window = create_window(680, 600);
+    if (!window) return;
+    ImGuiIO& io = ImGui::GetIO();
 
     bool show_advanced_left = false;
     bool show_advanced_right = false;
@@ -304,48 +694,19 @@ void gui_run(GuiState& state) {
     float status_timer = 0;
 
     bool always_on_top = false;
-    bool dragging = false;
-    double drag_start_x = 0, drag_start_y = 0;
-    int win_start_x = 0, win_start_y = 0;
+    WindowDrag drag;
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
-
-        // Window dragging via title bar
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-            double mx, my;
-            glfwGetCursorPos(window, &mx, &my);
-            if (!dragging && my < 30.0 && !ImGui::IsAnyItemActive()) {
-                dragging = true;
-                drag_start_x = mx;
-                drag_start_y = my;
-                glfwGetWindowPos(window, &win_start_x, &win_start_y);
-            }
-            if (dragging) {
-                int dx = (int)(mx - drag_start_x);
-                int dy = (int)(my - drag_start_y);
-                glfwSetWindowPos(window, win_start_x + dx, win_start_y + dy);
-            }
-        } else {
-            dragging = false;
-        }
-
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
+        drag.update(window);
+        state.gui_focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_TRUE;
 
         int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
+        begin_frame(window, display_w, display_h);
 
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2((float)display_w, (float)display_h));
-
-        ImGuiWindowFlags wf = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                              ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
-
-        if (ImGui::Begin("Ghast Clicker", nullptr, wf)) {
+        if (ImGui::Begin("Ghast Clicker", nullptr, MAIN_WINDOW_FLAGS)) {
             ImGui::Text("Ghast Clicker");
-            ImGui::SameLine(ImGui::GetWindowWidth() - 310);
+            ImGui::SameLine(ImGui::GetWindowWidth() - 400);
 
             if (ImGui::SmallButton(always_on_top ? "[pinned]" : "[pin]")) {
                 always_on_top = !always_on_top;
@@ -363,17 +724,37 @@ void gui_run(GuiState& state) {
             else
                 ImGui::TextDisabled("R: ---");
             ImGui::SameLine();
+            if (state.combat.jump.is_enabled())
+                ImGui::TextColored(COLOR_ON, "JR: ON");
+            else
+                ImGui::TextDisabled("JR: ---");
+            ImGui::SameLine();
+            if (state.combat.sprint.is_enabled())
+                ImGui::TextColored(COLOR_ON, "SR: ON");
+            else
+                ImGui::TextDisabled("SR: ---");
+            ImGui::SameLine();
             if (state.in_menu)
-                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "[INV]");
+                ImGui::TextColored(COLOR_WARN, "[INV]");
+
+            std::string input_error = state.get_input_error();
+            if (!input_error.empty())
+                ImGui::TextColored(COLOR_ERROR, "%s", input_error.c_str());
 
             ImGui::Separator();
 
-            if (ImGui::BeginTabBar("##tabs")) {
-                clicker_tab("Left Clicker", state.config.left, state.config.left_mode,
-                            state.left, state.config.key_left, show_advanced_left, LEFT_PRESETS);
+            if (ImGui::BeginTabBar("##tabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
+                home_tab(state);
 
-                clicker_tab("Right Clicker", state.config.right, state.config.right_mode,
-                            state.right, state.config.key_right, show_advanced_right, RIGHT_PRESETS);
+                clicker_tab("Left", state.config.left, state.config.left_mode,
+                            state.left, state.config.key_left, show_advanced_left,
+                            state.left_armed, LEFT_PRESETS);
+
+                clicker_tab("Right", state.config.right, state.config.right_mode,
+                            state.right, state.config.key_right, show_advanced_right,
+                            state.right_armed, RIGHT_PRESETS);
+
+                combat_tab(state);
 
                 if (ImGui::BeginTabItem("General")) {
                     ImGui::Spacing();
@@ -382,6 +763,8 @@ void gui_run(GuiState& state) {
                     ImGui::Separator();
                     keybind_button("Inventory Key", state.config.key_inventory);
                     ImGui::TextDisabled("Pauses clicking while inventory is open");
+                    keybind_button("Jump Reset Key", state.config.key_jump_reset);
+                    keybind_button("Sprint Reset Key", state.config.key_sprint_reset);
 
                     ImGui::Spacing();
                     ImGui::Separator();
@@ -459,6 +842,8 @@ void gui_run(GuiState& state) {
                         ImGui::Text("Menu paused: %s", state.in_menu ? "Yes" : "No");
                         ImGui::Text("Left armed: %s", state.left_armed ? "Yes" : "No");
                         ImGui::Text("Right armed: %s", state.right_armed ? "Yes" : "No");
+                        ImGui::Text("Keyboard grabbed: %s", state.combat.keyboard.forwarding() ? "Yes" : "No");
+                        ImGui::Text("Window focused: %s", state.gui_focused ? "Yes" : "No");
                     }
 
                     ImGui::Spacing();
@@ -653,9 +1038,19 @@ void gui_run(GuiState& state) {
                     if (ImGui::Checkbox("Record Right", &right_rec))
                         state.right.tracker().set_recording(right_rec);
 
-                    ImGui::Text("Left: %d samples  |  Right: %d samples",
+                    ImGui::SameLine();
+                    bool combat_rec = state.combat.jump.log().is_recording();
+                    if (ImGui::Checkbox("Record Combat", &combat_rec)) {
+                        state.combat.jump.log().set_recording(combat_rec);
+                        state.combat.sprint.log().set_recording(combat_rec);
+                    }
+                    tooltip("Logs every Jump Reset / Sprint Reset decision with its delay and length.");
+
+                    ImGui::Text("Left: %d  |  Right: %d  |  Jump Reset: %d  |  Sprint Reset: %d samples",
                                 state.left.tracker().history_size(),
-                                state.right.tracker().history_size());
+                                state.right.tracker().history_size(),
+                                state.combat.jump.log().history_size(),
+                                state.combat.sprint.log().history_size());
 
                     if (ImGui::Button("Export CSV", ImVec2(120, 0))) {
                         std::string dir = ConfigFile::path();
@@ -674,6 +1069,14 @@ void gui_run(GuiState& state) {
                             state.right.tracker().export_csv(rpath);
                             any = true;
                         }
+                        if (state.combat.jump.log().history_size() > 0) {
+                            state.combat.jump.log().export_csv(dir + "/analytics_jump_reset_" + ts + ".csv");
+                            any = true;
+                        }
+                        if (state.combat.sprint.log().history_size() > 0) {
+                            state.combat.sprint.log().export_csv(dir + "/analytics_sprint_reset_" + ts + ".csv");
+                            any = true;
+                        }
                         if (any) {
                             snprintf(status_msg, sizeof(status_msg), "Exported to %s/", dir.c_str());
                             status_timer = 5.0f;
@@ -686,6 +1089,8 @@ void gui_run(GuiState& state) {
                     if (ImGui::Button("Clear Data", ImVec2(120, 0))) {
                         state.left.tracker().clear_history();
                         state.right.tracker().clear_history();
+                        state.combat.jump.log().clear();
+                        state.combat.sprint.log().clear();
                         snprintf(status_msg, sizeof(status_msg), "Analytics data cleared");
                         status_timer = 3.0f;
                     }
@@ -701,21 +1106,9 @@ void gui_run(GuiState& state) {
             }
         }
         ImGui::End();
-
-        ImGui::Render();
-        glViewport(0, 0, display_w, display_h);
-        glClearColor(0.06f, 0.06f, 0.06f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        glfwSwapBuffers(window);
+        end_frame(window, display_w, display_h);
     }
 
     ConfigFile::save(state.config);
-
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    destroy_window(window);
 }

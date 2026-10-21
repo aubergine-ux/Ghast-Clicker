@@ -77,3 +77,62 @@ private:
         write(fd_, &ev, sizeof(ev));
     }
 };
+
+// Separate virtual keyboard so the mouse device keeps its pointer-only
+// classification. Registers the plain keyboard range only: any BTN_* bit
+// would make libinput treat it as a pointer or tablet.
+class UInputKeyboard {
+    int fd_ = -1;
+
+public:
+    static constexpr int MAX_CODE = 255;
+
+    UInputKeyboard() {
+        fd_ = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+        if (fd_ < 0)
+            throw std::runtime_error("Cannot open /dev/uinput (run as root or add user to input group)");
+
+        ioctl(fd_, UI_SET_EVBIT, EV_KEY);
+        for (int k = KEY_ESC; k <= MAX_CODE; k++)
+            ioctl(fd_, UI_SET_KEYBIT, k);
+        ioctl(fd_, UI_SET_EVBIT, EV_SYN);
+
+        struct uinput_setup setup{};
+        std::strncpy(setup.name, "Ghast Clicker Virtual Keyboard", UINPUT_MAX_NAME_SIZE - 1);
+        setup.id.bustype = BUS_USB;
+        setup.id.vendor = 0x1234;
+        setup.id.product = 0x5679;
+
+        if (ioctl(fd_, UI_DEV_SETUP, &setup) < 0 ||
+            ioctl(fd_, UI_DEV_CREATE) < 0) {
+            close(fd_);
+            throw std::runtime_error("Failed to create uinput keyboard");
+        }
+
+        usleep(100000);
+    }
+
+    ~UInputKeyboard() {
+        if (fd_ >= 0) {
+            ioctl(fd_, UI_DEV_DESTROY);
+            close(fd_);
+        }
+    }
+
+    UInputKeyboard(const UInputKeyboard&) = delete;
+    UInputKeyboard& operator=(const UInputKeyboard&) = delete;
+
+    void key(int code, int value) const {
+        emit(EV_KEY, code, value);
+        emit(EV_SYN, SYN_REPORT, 0);
+    }
+
+private:
+    void emit(int type, int code, int val) const {
+        struct input_event ev{};
+        ev.type = type;
+        ev.code = code;
+        ev.value = val;
+        write(fd_, &ev, sizeof(ev));
+    }
+};

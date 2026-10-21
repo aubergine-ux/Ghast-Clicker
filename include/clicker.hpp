@@ -6,9 +6,11 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <functional>
 
 class Clicker {
-    ClickerProfile profile_;
+    // Reference into Config so GUI edits apply to a running clicker.
+    ClickerProfile& profile_;
     const UInputDevice& device_;
     std::atomic<bool> enabled_{false};
     std::atomic<bool> running_{true};
@@ -17,9 +19,10 @@ class Clicker {
 
     std::atomic<uint32_t> click_count_{0};
     Tracker tracker_;
+    std::function<void()> on_press_;
 
 public:
-    Clicker(ClickerProfile profile, const UInputDevice& device)
+    Clicker(ClickerProfile& profile, const UInputDevice& device)
         : profile_(profile), device_(device) {
         thread_ = std::thread(&Clicker::run, this);
     }
@@ -40,6 +43,9 @@ public:
     ClickerProfile& profile() { return profile_; }
     const Tracker& tracker() const { return tracker_; }
     Tracker& tracker() { return tracker_; }
+
+    // Called on the clicker thread after every generated press. Set before enabling.
+    void set_on_press(std::function<void()> fn) { on_press_ = std::move(fn); }
 
 private:
     void run() {
@@ -77,6 +83,7 @@ private:
 
                 device_.click(profile_.mouse_button, 1);
                 click_count_++;
+                if (on_press_) on_press_();
                 wait_ns(hold_ns);
                 device_.click(profile_.mouse_button, 0);
 
@@ -86,6 +93,7 @@ private:
                     int64_t dbl_hold = calculate_hold_ns(interval_ns);
                     device_.click(profile_.mouse_button, 1);
                     click_count_++;
+                    if (on_press_) on_press_();
                     wait_ns(dbl_hold);
                     device_.click(profile_.mouse_button, 0);
                 }

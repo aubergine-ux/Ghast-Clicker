@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <dirent.h>
@@ -87,6 +88,67 @@ public:
         else if (match("distribution")) p.distribution = static_cast<DistributionType>(static_cast<int>(val));
     }
 
+    static void write_combat(FILE* f, const Config& cfg) {
+        const auto& j = cfg.jump_reset;
+        fprintf(f, "jump_reset.chance %g\n", j.chance);
+        fprintf(f, "jump_reset.delay_ms_mean %g\n", j.delay_ms_mean);
+        fprintf(f, "jump_reset.delay_ms_stddev %g\n", j.delay_ms_stddev);
+        fprintf(f, "jump_reset.delay_ms_min %g\n", j.delay_ms_min);
+        fprintf(f, "jump_reset.delay_ms_max %g\n", j.delay_ms_max);
+        fprintf(f, "jump_reset.hold_ms_mean %g\n", j.hold_ms_mean);
+        fprintf(f, "jump_reset.hold_ms_stddev %g\n", j.hold_ms_stddev);
+        fprintf(f, "jump_reset.hold_ms_min %g\n", j.hold_ms_min);
+        fprintf(f, "jump_reset.hold_ms_max %g\n", j.hold_ms_max);
+        fprintf(f, "jump_reset.cooldown_ms %g\n", j.cooldown_ms);
+        fprintf(f, "jump_reset.forward_only %d\n", j.forward_only ? 1 : 0);
+        fprintf(f, "jump_reset.allow_in_menu %d\n", j.allow_in_menu ? 1 : 0);
+        fprintf(f, "jump_reset.use_slot_filter %d\n", j.use_slot_filter ? 1 : 0);
+
+        const auto& r = cfg.sprint_reset;
+        fprintf(f, "sprint_reset.mode %d\n", static_cast<int>(r.mode));
+        fprintf(f, "sprint_reset.chance %g\n", r.chance);
+        fprintf(f, "sprint_reset.delay_ms_min %g\n", r.delay_ms_min);
+        fprintf(f, "sprint_reset.delay_ms_max %g\n", r.delay_ms_max);
+        fprintf(f, "sprint_reset.duration_ticks_mean %g\n", r.duration_ticks_mean);
+        fprintf(f, "sprint_reset.duration_ticks_stddev %g\n", r.duration_ticks_stddev);
+        fprintf(f, "sprint_reset.duration_ticks_min %g\n", r.duration_ticks_min);
+        fprintf(f, "sprint_reset.duration_ticks_max %g\n", r.duration_ticks_max);
+        fprintf(f, "sprint_reset.cooldown_ms %g\n", r.cooldown_ms);
+        fprintf(f, "sprint_reset.forward_only %d\n", r.forward_only ? 1 : 0);
+        fprintf(f, "sprint_reset.use_slot_filter %d\n", r.use_slot_filter ? 1 : 0);
+    }
+
+    static bool read_combat_key(const char* key, double val, Config& cfg) {
+        auto& j = cfg.jump_reset;
+        auto& r = cfg.sprint_reset;
+        if (!strcmp(key, "jump_reset.chance")) j.chance = val;
+        else if (!strcmp(key, "jump_reset.delay_ms_mean")) j.delay_ms_mean = val;
+        else if (!strcmp(key, "jump_reset.delay_ms_stddev")) j.delay_ms_stddev = val;
+        else if (!strcmp(key, "jump_reset.delay_ms_min")) j.delay_ms_min = val;
+        else if (!strcmp(key, "jump_reset.delay_ms_max")) j.delay_ms_max = val;
+        else if (!strcmp(key, "jump_reset.hold_ms_mean")) j.hold_ms_mean = val;
+        else if (!strcmp(key, "jump_reset.hold_ms_stddev")) j.hold_ms_stddev = val;
+        else if (!strcmp(key, "jump_reset.hold_ms_min")) j.hold_ms_min = val;
+        else if (!strcmp(key, "jump_reset.hold_ms_max")) j.hold_ms_max = val;
+        else if (!strcmp(key, "jump_reset.cooldown_ms")) j.cooldown_ms = val;
+        else if (!strcmp(key, "jump_reset.forward_only")) j.forward_only = (int)val != 0;
+        else if (!strcmp(key, "jump_reset.allow_in_menu")) j.allow_in_menu = (int)val != 0;
+        else if (!strcmp(key, "jump_reset.use_slot_filter")) j.use_slot_filter = (int)val != 0;
+        else if (!strcmp(key, "sprint_reset.mode")) r.mode = static_cast<SprintResetMode>(std::max(0, std::min(2, (int)val)));
+        else if (!strcmp(key, "sprint_reset.chance")) r.chance = val;
+        else if (!strcmp(key, "sprint_reset.delay_ms_min")) r.delay_ms_min = val;
+        else if (!strcmp(key, "sprint_reset.delay_ms_max")) r.delay_ms_max = val;
+        else if (!strcmp(key, "sprint_reset.duration_ticks_mean")) r.duration_ticks_mean = val;
+        else if (!strcmp(key, "sprint_reset.duration_ticks_stddev")) r.duration_ticks_stddev = val;
+        else if (!strcmp(key, "sprint_reset.duration_ticks_min")) r.duration_ticks_min = val;
+        else if (!strcmp(key, "sprint_reset.duration_ticks_max")) r.duration_ticks_max = val;
+        else if (!strcmp(key, "sprint_reset.cooldown_ms")) r.cooldown_ms = val;
+        else if (!strcmp(key, "sprint_reset.forward_only")) r.forward_only = (int)val != 0;
+        else if (!strcmp(key, "sprint_reset.use_slot_filter")) r.use_slot_filter = (int)val != 0;
+        else return false;
+        return true;
+    }
+
     static bool load(Config& cfg, const std::string& filename = "config") {
         std::string p = path() + "/" + filename;
         FILE* f = fopen(p.c_str(), "r");
@@ -100,10 +162,13 @@ public:
 
             read_profile_key(key, val, "left", cfg.left);
             read_profile_key(key, val, "right", cfg.right);
+            if (read_combat_key(key, val, cfg)) continue;
 
             if (!strcmp(key, "key_left")) cfg.key_left = (int)val;
             else if (!strcmp(key, "key_right")) cfg.key_right = (int)val;
             else if (!strcmp(key, "key_inventory")) cfg.key_inventory = (int)val;
+            else if (!strcmp(key, "key_jump_reset")) cfg.key_jump_reset = (int)val;
+            else if (!strcmp(key, "key_sprint_reset")) cfg.key_sprint_reset = (int)val;
             else if (!strcmp(key, "left_mode")) cfg.left_mode = (int)val == 0 ? ActivationMode::TOGGLE : ((int)val == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
             else if (!strcmp(key, "right_mode")) cfg.right_mode = (int)val == 0 ? ActivationMode::TOGGLE : ((int)val == 1 ? ActivationMode::HOLD : ActivationMode::MOUSE);
             else if (!strcmp(key, "slot_filter_enabled")) cfg.slot_filter_enabled = (int)val != 0;
@@ -168,6 +233,9 @@ public:
         fprintf(f, "key_left %d\n", cfg.key_left);
         fprintf(f, "key_right %d\n", cfg.key_right);
         fprintf(f, "key_inventory %d\n", cfg.key_inventory);
+        fprintf(f, "key_jump_reset %d\n", cfg.key_jump_reset);
+        fprintf(f, "key_sprint_reset %d\n", cfg.key_sprint_reset);
+        write_combat(f, cfg);
         fprintf(f, "left_mode %d\n", cfg.left_mode == ActivationMode::TOGGLE ? 0 : (cfg.left_mode == ActivationMode::HOLD ? 1 : 2));
         fprintf(f, "right_mode %d\n", cfg.right_mode == ActivationMode::TOGGLE ? 0 : (cfg.right_mode == ActivationMode::HOLD ? 1 : 2));
         fprintf(f, "slot_filter_enabled %d\n", cfg.slot_filter_enabled ? 1 : 0);
