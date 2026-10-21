@@ -153,7 +153,13 @@ struct Config {
     int key_left = KEY_F6;
     int key_right = KEY_F7;
     int key_inventory = KEY_E;
+    bool inventory_key_enabled = true;
     int key_escape = KEY_ESC;
+
+    int accent_preset = 0;
+    float accent_r = 0.24f;
+    float accent_g = 0.49f;
+    float accent_b = 0.78f;
 
     bool slot_filter_enabled = false;
     bool allowed_slots[9] = {true, false, false, false, false, false, false, false, false};
