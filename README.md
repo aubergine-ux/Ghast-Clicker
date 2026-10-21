@@ -1,47 +1,33 @@
 <div align="center">
 
-# 👻 Ghast Clicker
+# Ghast Clicker
 
-**A humanized auto-clicker for Linux & Wayland**
+A humanized auto-clicker for Linux, Wayland included.
 
-Built on the humanization engine from [GhostTap](https://github.com/IcySnex/GhostTap), with a native ImGui interface.
-
-![Platform](https://img.shields.io/badge/platform-Linux-informational?style=flat-square&logo=linux&logoColor=white)
-![Wayland](https://img.shields.io/badge/Wayland-%20%2B%20X11-blueviolet?style=flat-square)
-![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=cplusplus&logoColor=white)
-![License](https://img.shields.io/badge/license-GPLv3-green?style=flat-square)
-
-[Quick Start](#-quick-start) •
-[Features](#-features) •
-[Using It](#-using-it) •
-[Combat Modules](#-combat-modules) •
-[Troubleshooting](#-troubleshooting)
+![Linux](https://img.shields.io/badge/linux-wayland%20%7C%20x11-8b5cf6?style=flat-square&logo=linux&logoColor=white)
+![C++17](https://img.shields.io/badge/c%2B%2B-17-8b5cf6?style=flat-square)
+![GPLv3](https://img.shields.io/badge/license-GPLv3-8b5cf6?style=flat-square)
 
 </div>
 
----
+<br>
 
-## ✨ Features
+Ghast Clicker started as a Linux port of [GhostTap](https://github.com/IcySnex/GhostTap). GhostTap is a Forge mod that clicks from inside Minecraft; this one is a regular program that sends clicks through `/dev/uinput`, so it doesn't care which game, launcher or compositor you use.
 
-| | |
-|---|---|
-| 🖱️ **Dual clickers** | Independent left & right clickers, each with its own CPS, timing and hotkey |
-| 🧠 **Deep humanization** | Gaussian / Poisson / Uniform CPS, spikes, stutters, heavy holds, rhythm drift, fatigue breaks, double-clicks |
-| 🎛️ **3 activation modes** | Toggle, Hold, or Mouse (arm with a key, then just hold your real mouse button) |
-| 🦘 **Jump Reset** | Taps Space right after you attack to cut the knockback you take in trades |
-| 🏃 **Sprint Reset** | W-Tap, S-Tap or Shift-Tap after each hit for full sprint knockback |
-| 🎯 **Presets** | Normal, Jitter, Butterfly and Drag Click profiles, one click each |
-| 🔁 **Macros** | Chain clicks, delays and hotbar switches, bound to any key |
-| 🎒 **Smart pausing** | Pauses while your inventory is open; optional hotbar slot filter |
-| 📊 **Analytics** | Live CPS graphs, session stats, CSV export for clicks *and* combat decisions |
-| 💾 **Profiles** | Save and load named configs in `~/.config/ghast-clicker/` |
-| 🔊 **Audio cues** | Optional beep when anything turns on or off |
+The clicking isn't a fixed interval. CPS is drawn from a distribution and drifts over time, with the occasional spike, stutter, long hold, double-click or short break thrown in, the way real clicking looks.
 
-Clicks and key presses are injected through `/dev/uinput`, so it works with **any** application, on Wayland and X11 alike.
+## What's in it
 
----
+- Separate left and right clickers, each with its own CPS, timing and hotkey
+- Toggle, hold and mouse activation modes
+- Presets: Normal, Jitter, Butterfly, Drag Click
+- Jump Reset and Sprint Reset (W-Tap / S-Tap / Shift-Tap)
+- Macros for click, delay and hotbar-switch sequences
+- Pauses while your inventory is open, plus an optional hotbar slot filter
+- Live CPS graphs, session stats and CSV export
+- Saved profiles in `~/.config/ghast-clicker/`
 
-## 🚀 Quick Start
+## Install
 
 ```bash
 git clone https://github.com/aubergine-ux/Ghast-Clicker.git
@@ -49,68 +35,51 @@ cd Ghast-Clicker
 ./install.sh
 ```
 
-That's it. The script installs dependencies (Arch, Debian/Ubuntu, Fedora), builds, adds **Ghast Clicker** to your app menu, and sets up device permissions.
+The script installs the build dependencies (Arch, Debian/Ubuntu and Fedora are supported), builds the app, puts it in your app menu and sets up the device permissions it needs. If it adds you to the `input` group you'll have to log out and back in once.
 
-> [!IMPORTANT]
-> If the installer adds you to the `input` group, **log out and back in** once before the first launch.
+`./install.sh --uninstall` removes it again. Your settings are left alone.
 
-To remove it later: `./install.sh --uninstall`
+## Usage
 
----
+Open Ghast Clicker from your app menu. The Home tab lists every module with its hotkey and current status; click a hotkey to rebind it. After that you can leave the window in the background and use the keys from inside the game.
 
-## 🎮 Using It
-
-Open **Ghast Clicker** from your app menu. The **Home** tab shows every module at a glance: its hotkey, mode and live status. Click any hotkey button and press a key to rebind it.
-
-Then switch to your game and press the hotkeys:
-
-| Default key | Action |
+| Key | Does |
 |:---:|---|
 | <kbd>F6</kbd> | Left clicker |
 | <kbd>F7</kbd> | Right clicker |
 | <kbd>F9</kbd> | Jump Reset on/off |
 | <kbd>F10</kbd> | Sprint Reset on/off |
-| <kbd>E</kbd> | Inventory open/close (pauses clicking) |
+| <kbd>E</kbd> | Inventory, pauses everything while open |
 
-### Activation modes
+Each clicker has three activation modes:
 
-| Mode | How it works |
-|---|---|
-| **Toggle** | Press the key to start, press again to stop |
-| **Hold** | Clicks only while the key is held |
-| **Mouse** | Press the key once to *arm*, then hold your real mouse button to auto-click. Your physical clicks are masked. Best for PvP. |
+- **Toggle**: press the key to start, press it again to stop.
+- **Hold**: clicks while the key is held down.
+- **Mouse**: press the key once to arm it, then hold your actual mouse button to click. This is the one most people want for PvP.
 
-Settings save automatically when you close the window.
+Settings are saved when you close the window.
 
----
+## Jump Reset and Sprint Reset
 
-## 💥 Combat Modules
+Both come from GhostTap and live in the Combat tab.
 
-Ported from GhostTap's Jump Reset and Sprint Reset. Configure both in the **Combat** tab.
+**Jump Reset** taps Space just after you hit someone, so you're already jumping when their hit comes back and you take less knockback.
 
-| Module | What it does | Key settings |
-|---|---|---|
-| **Jump Reset** | Presses Space shortly after your attack so you jump as the return hit lands | Chance, reaction delay, hold time, cooldown, "only while holding W" |
-| **Sprint Reset** | Breaks sprint for 1–3 ticks after your attack so your next hit deals full sprint knockback | Mode (W-Tap / S-Tap / Shift-Tap), chance, delay, duration in ticks, cooldown |
+**Sprint Reset** breaks your sprint for one to three ticks after a hit so the next one deals full sprint knockback. It can do this by letting go of W, tapping S, or tapping Shift.
 
-> [!NOTE]
-> GhostTap is an in-game mod and reacts to Minecraft's own hit packets. Ghast Clicker runs outside the game, so both modules fire off **your left clicks** (real or auto-clicked) instead. A **cooldown** stands in for hit detection: at most one reset per window, matching how often a hit can actually land (every 500 ms).
+There's one real difference from GhostTap. The mod can see Minecraft's hit packets; an outside program can't. So here both modules react to your left clicks, and a cooldown keeps them to one reset per hit window (a player can only take damage every 500 ms anyway).
 
-> [!TIP]
-> **W-Tap** has to release <kbd>W</kbd> while you're still holding it, so while it's on, Ghast Clicker grabs your keyboard and passes every key through a virtual one. The grab starts and stops only when no keys are held, so nothing gets stuck. **S-Tap** and **Shift-Tap** don't need the grab.
+W-Tap needs to let go of W while your finger is still on it, which means grabbing the keyboard and passing keys through a virtual one while it's turned on. It only grabs or releases while no keys are down, so nothing gets stuck. S-Tap and Shift-Tap don't need any of that.
 
-Neither module fires while the Ghast Clicker window itself is focused.
+Neither one fires while the Ghast Clicker window is focused.
 
----
-
-## 🔧 Troubleshooting
+## Troubleshooting
 
 <details>
-<summary><b>"Setup needed" window / permission errors</b></summary>
-
+<summary>It opens a "Setup needed" window</summary>
 <br>
 
-Ghast Clicker needs access to `/dev/uinput` and `/dev/input/*`. Run `./install.sh`, or do it by hand:
+It can't reach `/dev/uinput` or `/dev/input`. Run `./install.sh`, or do the same thing by hand:
 
 ```bash
 sudo usermod -aG input $USER
@@ -119,62 +88,48 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 sudo modprobe uinput
 ```
 
-Then log out and back in. The setup window has a **Copy fix commands** button for this.
+Then log out and back in.
 
 </details>
 
 <details>
-<summary><b>Mouse feels faster/slower in Mouse mode</b></summary>
-
+<summary>My mouse feels different in mouse mode</summary>
 <br>
 
-Mouse mode re-emits your mouse through a virtual device. The bundled udev rule (installed by `install.sh`) gives that device a flat acceleration profile so it matches your real mouse.
+Mouse mode routes your mouse through a virtual device. The udev rule in this repo gives that device flat acceleration so it matches your real one. `install.sh` sets it up; if you built by hand, copy `99-ghast-clicker.rules` into `/etc/udev/rules.d/`.
 
 </details>
 
 <details>
-<summary><b>W-Tap says "Release all keys to finish grabbing the keyboard"</b></summary>
-
+<summary>W-Tap keeps saying "Release all keys…"</summary>
 <br>
 
-The keyboard is only grabbed or released while no keys are held, so a key can't get stuck down in your compositor. Let go of everything for a moment and it'll switch.
+It's waiting for a moment where you aren't holding anything so it can grab the keyboard safely. Let go of every key briefly.
 
 </details>
 
 <details>
-<summary><b>Combat modules never trigger</b></summary>
-
+<summary>Jump Reset / Sprint Reset never do anything</summary>
 <br>
 
-Check the **Combat** tab's decision counter and turn on **Record Combat** in **Analytics** to see why each decision was skipped (`SKIP_NOT_FORWARD`, `SKIP_MENU`, `SKIP_SLOT`…). By default both modules only fire while you're holding <kbd>W</kbd>.
+By default both only fire while you're holding W. If that's not it, turn on "Record Combat" in the Analytics tab, export, and the CSV will tell you why each one was skipped.
 
 </details>
 
----
+## Building by hand
 
-## 🧰 Advanced
-
-<details>
-<summary><b>Manual build</b></summary>
-
-<br>
-
-Requires `cmake`, `glfw`, OpenGL headers and a C++17 compiler.
+You need `cmake`, `glfw`, OpenGL headers and a C++17 compiler.
 
 ```bash
-# Arch
-sudo pacman -S glfw cmake base-devel
+sudo pacman -S glfw cmake base-devel   # Arch
 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 ./build/ghast-clicker
 ```
 
-</details>
-
 <details>
-<summary><b>Command-line options</b></summary>
-
+<summary>Command-line options</summary>
 <br>
 
 ```
@@ -188,34 +143,29 @@ cmake --build build -j$(nproc)
 --toggle        Toggle mode (default)
 --hold          Hold mode
 --mouse         Mouse mode
---headless      CLI only, no GUI
+--headless      No GUI, status in the terminal
 --save          Save config to ~/.config/ghast-clicker/config
 ```
 
 </details>
 
 <details>
-<summary><b>Analytics CSV files</b></summary>
-
+<summary>Exported CSV files</summary>
 <br>
 
-**Analytics → Export CSV** writes to `~/.config/ghast-clicker/`:
+Analytics → Export CSV writes to `~/.config/ghast-clicker/`:
 
-| File | Columns |
-|---|---|
-| `analytics_left_*.csv` / `analytics_right_*.csv` | Timestamp, TargetCPS, ActualCPS, HoldMS, IntervalMS, Trend |
-| `analytics_jump_reset_*.csv` / `analytics_sprint_reset_*.csv` | Timestamp, Outcome, Action, DelayMS, HoldMS |
+- `analytics_left_*.csv`, `analytics_right_*.csv`: Timestamp, TargetCPS, ActualCPS, HoldMS, IntervalMS, Trend
+- `analytics_jump_reset_*.csv`, `analytics_sprint_reset_*.csv`: Timestamp, Outcome, Action, DelayMS, HoldMS
 
 </details>
 
----
+## Credits
 
-## 🙏 Credits
+- [IcySnex/GhostTap](https://github.com/IcySnex/GhostTap) for the humanization model, Jump Reset and Sprint Reset
+- [b1scoito/clicker](https://github.com/b1scoito/clicker), the original Windows clicker
+- [ocornut/imgui](https://github.com/ocornut/imgui) for the GUI
 
-- [IcySnex/GhostTap](https://github.com/IcySnex/GhostTap): humanization engine, variance model, Jump Reset & Sprint Reset
-- [b1scoito/clicker](https://github.com/b1scoito/clicker): original Windows clicker
-- [ocornut/imgui](https://github.com/ocornut/imgui): GUI framework
+## License
 
-## 📄 License
-
-Licensed under the **GNU General Public License v3.0**. See [LICENSE](LICENSE).
+GPLv3, see [LICENSE](LICENSE).
