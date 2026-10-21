@@ -8,7 +8,7 @@
 #include <chrono>
 
 class Clicker {
-    ClickerProfile profile_;
+    ClickerProfile& profile_;
     const UInputDevice& device_;
     std::atomic<bool> enabled_{false};
     std::atomic<bool> running_{true};
@@ -19,8 +19,8 @@ class Clicker {
     Tracker tracker_;
 
 public:
-    Clicker(ClickerProfile profile, const UInputDevice& device)
-        : profile_(profile), device_(device) {
+    Clicker(ClickerProfile& profile, const UInputDevice& device)
+    : profile_(profile), device_(device) {
         thread_ = std::thread(&Clicker::run, this);
     }
 
