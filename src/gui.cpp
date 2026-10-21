@@ -9,6 +9,171 @@
 #include <cstring>
 #include <linux/input-event-codes.h>
 #include <cfloat>
+#include <cstdlib>
+
+// Global accent color state
+static ImVec4 g_accent_color(0.24f, 0.49f, 0.78f, 1.0f);  // Default Oxygen blue
+static ImVec4 g_accent_hover(0.33f, 0.58f, 0.86f, 1.0f);
+static ImVec4 g_accent_active(0.17f, 0.37f, 0.62f, 1.0f);
+
+// Read KDE accent color from kdeglobals
+static bool read_kde_accent_color(float &r, float &g, float &b) {
+    const char* home = getenv("HOME");
+    if (!home) return false;
+
+    std::string path = std::string(home) + "/.config/kdeglobals";
+    FILE* f = fopen(path.c_str(), "r");
+    if (!f) return false;
+
+    char line[256];
+    bool in_colors = false;
+
+    while (fgets(line, sizeof(line), f)) {
+        if (strstr(line, "[Colors:Selection]")) {
+            in_colors = true;
+            continue;
+        }
+        if (line[0] == '[' && !strstr(line, "[Colors:Selection]")) {
+            in_colors = false;
+            continue;
+        }
+        if (in_colors) {
+            char* eq = strchr(line, '=');
+            if (eq && strstr(line, "BackgroundNormal")) {
+                char* val = eq + 1;
+                int cr, cg, cb;
+                if (sscanf(val, "%d,%d,%d", &cr, &cg, &cb) == 3) {
+                    r = cr / 255.0f;
+                    g = cg / 255.0f;
+                    b = cb / 255.0f;
+                    fclose(f);
+                    return true;
+                }
+            }
+        }
+    }
+    fclose(f);
+    return false;
+}
+
+// Apply complete Oxygen-style theme with custom accent
+static void setup_oxygen_theme(int preset, float custom_r, float custom_g, float custom_b) {
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    // Set base accent color based on preset
+    if (preset == 0) {
+        g_accent_color = ImVec4(0.24f, 0.49f, 0.78f, 1.0f); // Oxygen Blue
+    } else if (preset == 1) {
+        g_accent_color = ImVec4(0.80f, 0.20f, 0.20f, 1.0f); // Red
+    } else if (preset == 2) {
+        g_accent_color = ImVec4(0.20f, 0.80f, 0.30f, 1.0f); // Green
+    } else if (preset == 3) {
+        g_accent_color = ImVec4(0.60f, 0.30f, 0.90f, 1.0f); // Purple
+    } else if (preset == 4) {
+        g_accent_color = ImVec4(custom_r, custom_g, custom_b, 1.0f); // Custom
+    } else if (preset == 5) {
+        float kr, kg, kb;
+        if (read_kde_accent_color(kr, kg, kb)) {
+            g_accent_color = ImVec4(kr, kg, kb, 1.0f); // Follow KDE
+        } else {
+            g_accent_color = ImVec4(0.24f, 0.49f, 0.78f, 1.0f); // Fallback
+        }
+    }
+
+    // Calculate variants (lighter/darker)
+    g_accent_hover = ImVec4(
+        g_accent_color.x + (1.0f - g_accent_color.x) * 0.15f,
+        g_accent_color.y + (1.0f - g_accent_color.y) * 0.15f,
+        g_accent_color.z + (1.0f - g_accent_color.z) * 0.15f,
+        1.0f
+    );
+    g_accent_active = ImVec4(
+        g_accent_color.x * 0.75f,
+        g_accent_color.y * 0.75f,
+        g_accent_color.z * 0.75f,
+        1.0f
+    );
+
+    ImVec4* colors = style.Colors;
+
+    // Base colors (dark theme)
+    colors[ImGuiCol_Text]                   = ImVec4(0.90f, 0.95f, 1.00f, 1.00f);
+    colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.55f, 0.60f, 1.00f);
+    colors[ImGuiCol_WindowBg]               = ImVec4(0.06f, 0.11f, 0.18f, 0.94f);
+    colors[ImGuiCol_ChildBg]                = ImVec4(0.08f, 0.14f, 0.22f, 0.50f);
+    colors[ImGuiCol_PopupBg]                = ImVec4(0.08f, 0.14f, 0.22f, 0.98f);
+    colors[ImGuiCol_Border]                 = ImVec4(0.20f, 0.28f, 0.38f, 0.50f);
+    colors[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    colors[ImGuiCol_FrameBg]                = ImVec4(0.10f, 0.16f, 0.24f, 0.60f);
+    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.15f, 0.22f, 0.32f, 0.70f);
+    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.18f, 0.26f, 0.38f, 0.80f);
+    colors[ImGuiCol_TitleBg]                = ImVec4(0.08f, 0.14f, 0.22f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]          = g_accent_active;
+    colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.08f, 0.14f, 0.22f, 1.00f);
+    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.08f, 0.14f, 0.22f, 0.90f);
+    colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.05f, 0.09f, 0.15f, 0.50f);
+    colors[ImGuiCol_ScrollbarGrab]          = g_accent_active;
+    colors[ImGuiCol_ScrollbarGrabHovered]   = g_accent_color;
+    colors[ImGuiCol_ScrollbarGrabActive]    = g_accent_hover;
+    colors[ImGuiCol_CheckMark]              = g_accent_hover;
+    colors[ImGuiCol_SliderGrab]             = g_accent_color;
+    colors[ImGuiCol_SliderGrabActive]       = g_accent_hover;
+    colors[ImGuiCol_Button]                 = g_accent_active;
+    colors[ImGuiCol_ButtonHovered]          = g_accent_color;
+    colors[ImGuiCol_ButtonActive]           = g_accent_hover;
+    colors[ImGuiCol_Header]                 = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    colors[ImGuiCol_HeaderHovered]          = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    colors[ImGuiCol_HeaderActive]           = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    colors[ImGuiCol_Separator]              = ImVec4(0.20f, 0.28f, 0.38f, 0.60f);
+    colors[ImGuiCol_SeparatorHovered]       = g_accent_color;
+    colors[ImGuiCol_SeparatorActive]        = g_accent_hover;
+    colors[ImGuiCol_ResizeGrip]             = ImVec4(g_accent_color.x, g_accent_color.y, g_accent_color.z, 0.30f);
+    colors[ImGuiCol_ResizeGripHovered]      = g_accent_color;
+    colors[ImGuiCol_ResizeGripActive]       = g_accent_hover;
+    colors[ImGuiCol_Tab]                    = ImVec4(0.10f, 0.16f, 0.24f, 0.90f);
+    colors[ImGuiCol_TabHovered]             = g_accent_color;
+    colors[ImGuiCol_TabActive]              = g_accent_active;
+    colors[ImGuiCol_TabUnfocused]           = ImVec4(0.08f, 0.14f, 0.22f, 0.90f);
+    colors[ImGuiCol_TabUnfocusedActive]     = g_accent_active;
+    colors[ImGuiCol_PlotLines]              = g_accent_color;
+    colors[ImGuiCol_PlotLinesHovered]       = g_accent_hover;
+    colors[ImGuiCol_PlotHistogram]          = g_accent_color;
+    colors[ImGuiCol_PlotHistogramHovered]   = g_accent_hover;
+    colors[ImGuiCol_TextSelectedBg]         = ImVec4(g_accent_color.x, g_accent_color.y, g_accent_color.z, 0.35f);
+    colors[ImGuiCol_DragDropTarget]         = g_accent_hover;
+    colors[ImGuiCol_NavHighlight]           = g_accent_color;
+    colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
+    colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.00f, 0.00f, 0.00f, 0.20f);
+    colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.00f, 0.00f, 0.00f, 0.35f);
+
+    // Oxygen-style rounding and sizing
+    style.WindowPadding         = ImVec2(12, 10);
+    style.FramePadding          = ImVec2(8, 4);
+    style.ItemSpacing           = ImVec2(8, 6);
+    style.ItemInnerSpacing      = ImVec2(6, 4);
+    style.TouchExtraPadding     = ImVec2(0, 0);
+    style.IndentSpacing         = 20.0f;
+    style.ScrollbarSize         = 14.0f;
+    style.GrabMinSize           = 12.0f;
+
+    style.WindowBorderSize      = 0.0f;
+    style.ChildBorderSize       = 0.0f;
+    style.PopupBorderSize       = 1.0f;
+    style.FrameBorderSize       = 0.0f;
+    style.TabBorderSize         = 0.0f;
+
+    style.WindowRounding        = 8.0f;
+    style.ChildRounding         = 6.0f;
+    style.FrameRounding         = 6.0f;
+    style.PopupRounding         = 6.0f;
+    style.ScrollbarRounding     = 8.0f;
+    style.GrabRounding          = 4.0f;
+    style.TabRounding           = 6.0f;
+
+    style.WindowTitleAlign      = ImVec2(0.5f, 0.5f);
+    style.WindowMenuButtonPosition = ImGuiDir_None;
+    style.ColorButtonPosition   = ImGuiDir_Right;
+}
 
 static const char* key_name(int code) {
     static char buf[32];
@@ -141,8 +306,6 @@ static void mouse_button_callback(GLFWwindow*, int button, int action, int) {
 
 static const float LABEL_W = 175.0f;
 
-// Glassy oxygen button. Only full-rounding calls; gradient quads inset 3px
-// so their square corners stay inside the rounded silhouette.
 static bool oxygen_button(const char* label, ImVec2 size_arg = ImVec2(0, 0)) {
     const float R = 7.0f;
     ImVec2 ls = ImGui::CalcTextSize(label, nullptr, true);
@@ -157,16 +320,34 @@ static bool oxygen_button(const char* label, ImVec2 size_arg = ImVec2(0, 0)) {
     bool act = ImGui::IsItemActive();
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
-    ImU32 top = act ? IM_COL32(36, 82, 134, 255) : hov ? IM_COL32(104, 166, 232, 255) : IM_COL32(78, 136, 200, 255);
-    ImU32 bot = act ? IM_COL32(20, 48, 82, 255)  : hov ? IM_COL32(48, 98, 156, 255)  : IM_COL32(32, 72, 118, 255);
+    ImVec4 btn_color = act ? g_accent_hover : (hov ? g_accent_color : g_accent_active);
+    ImVec4 btn_dark = ImVec4(btn_color.x * 0.5f, btn_color.y * 0.5f, btn_color.z * 0.5f, 1.0f);
+    ImVec4 btn_border = ImVec4(
+        btn_color.x * 1.4f > 1.0f ? 1.0f : btn_color.x * 1.4f,
+        btn_color.y * 1.4f > 1.0f ? 1.0f : btn_color.y * 1.4f,
+        btn_color.z * 1.4f > 1.0f ? 1.0f : btn_color.z * 1.4f, 0.6f
+    );
+
+    ImU32 bot = IM_COL32((int)(btn_dark.x * 255), (int)(btn_dark.y * 255), (int)(btn_dark.z * 255), 255);
+
+    // Base fill with rounding
     dl->AddRectFilled(mn, mx, bot, R);
-    dl->AddRectFilledMultiColor(ImVec2(mn.x + 3, mn.y + 3), ImVec2(mx.x - 3, mx.y - 3),
-                                top, top, IM_COL32(0,0,0,0), IM_COL32(0,0,0,0));
-    float midY = mn.y + sz.y * 0.52f;
-    dl->AddRectFilledMultiColor(ImVec2(mn.x + 3, mn.y + 3), ImVec2(mx.x - 3, midY),
-                                IM_COL32(255,255,255,85), IM_COL32(255,255,255,85),
-                                IM_COL32(255,255,255,6),  IM_COL32(255,255,255,6));
-    dl->AddRect(mn, mx, IM_COL32(165, 208, 250, 110), 1.0f, R);
+
+    // Highlight inset MORE to hide sharp corners inside the rounded base
+    float inset = 3.0f;
+    float highlight_h = (sz.y * 0.45f);
+    ImVec2 hl_tl(mn.x + inset, mn.y + inset);
+    ImVec2 hl_br(mx.x - inset, mn.y + highlight_h);
+
+    dl->AddRectFilledMultiColor(hl_tl, hl_br,
+                                IM_COL32(255,255,255,100),
+                                IM_COL32(255,255,255,100),
+                                IM_COL32(255,255,255,5),
+                                IM_COL32(255,255,255,5));
+
+    // Border with rounding
+    dl->AddRect(mn, mx, IM_COL32((int)(btn_border.x*255), (int)(btn_border.y*255), (int)(btn_border.z*255), 150), R, ImDrawFlags_None, 1.0f);
+
     const char* tend = strstr(label, "##");
     dl->AddText(ImVec2(mn.x + (sz.x - ls.x) * 0.5f, mn.y + (sz.y - ls.y) * 0.5f),
                 IM_COL32(238, 246, 255, 255), label, tend ? tend : nullptr);
@@ -195,6 +376,7 @@ static void keybind_row(const char* label, int& key_code) {
     if (oxygen_button(buf, ImVec2(140, 0))) g_binding_target = &key_code;
 }
 
+// Clean slider with dynamic accent thumb (no double overlays)
 static bool row_slider(const char* label, double* v, double lo, double hi, const char* fmt) {
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(label);
@@ -203,28 +385,58 @@ static bool row_slider(const char* label, double* v, double lo, double hi, const
     char id[96]; snprintf(id, sizeof(id), "##%s", label);
     bool changed = ImGui::SliderScalar(id, ImGuiDataType_Double, v, &lo, &hi, fmt);
 
-    // oxygen thumb overlay (native grab is transparent via style)
+    // Get slider rect
     ImVec2 r0 = ImGui::GetItemRectMin(), r1 = ImGui::GetItemRectMax();
     float grab_w = ImGui::GetStyle().GrabMinSize;
-    float t = (float)((*v - lo) / (hi - lo)); if (t < 0) t = 0; if (t > 1) t = 1;
+    float t = (float)((*v - lo) / (hi - lo));
+    if (t < 0) t = 0; if (t > 1) t = 1;
     float gx = r0.x + (r1.x - r0.x - grab_w) * t;
     ImVec2 g0(gx, r0.y + 3), g1(gx + grab_w, r1.y - 3);
-    bool hov = ImGui::IsItemHovered(); bool act = ImGui::IsItemActive();
+
+    bool hov = ImGui::IsItemHovered();
+    bool act = ImGui::IsItemActive();
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImU32 top = act ? IM_COL32(36, 82, 134, 255) : hov ? IM_COL32(104, 166, 232, 255) : IM_COL32(78, 136, 200, 255);
-    ImU32 bot = act ? IM_COL32(20, 48, 82, 255)  : hov ? IM_COL32(48, 98, 156, 255)  : IM_COL32(32, 72, 118, 255);
-    float gr = (g1.x - g0.x) * 0.5f;
-    dl->AddRectFilled(g0, g1, bot, gr);
-    dl->AddRectFilledMultiColor(ImVec2(g0.x + 2, g0.y + 2), ImVec2(g1.x - 2, g1.y - 2),
-                                top, top, IM_COL32(0,0,0,0), IM_COL32(0,0,0,0));
-    dl->AddRectFilledMultiColor(ImVec2(g0.x + 2, g0.y + 2), ImVec2(g1.x - 2, g0.y + (g1.y - g0.y) * 0.55f),
-                                IM_COL32(255,255,255,90), IM_COL32(255,255,255,90), IM_COL32(255,255,255,8), IM_COL32(255,255,255,8));
-    dl->AddRect(g0, g1, IM_COL32(165, 208, 250, 130), 1.0f, gr);
+
+    // Choose color based on state
+    ImVec4 thumb_color = act ? g_accent_hover : (hov ? g_accent_color : g_accent_active);
+    float gr = grab_w * 0.5f;
+
+    // Draw thumb background (darker base)
+    dl->AddRectFilled(g0, g1, IM_COL32(
+        (int)(thumb_color.x * 0.6f * 255),
+        (int)(thumb_color.y * 0.6f * 255),
+        (int)(thumb_color.z * 0.6f * 255),
+        255
+    ), gr);
+
+    // Draw thumb highlight (top gradient)
+    float mid_y = g0.y + (g1.y - g0.y) * 0.45f;
+    dl->AddRectFilledMultiColor(
+        ImVec2(g0.x + 2, g0.y + 2),
+        ImVec2(g1.x - 2, mid_y),
+        IM_COL32(255, 255, 255, 100),
+        IM_COL32(255, 255, 255, 100),
+        IM_COL32(255, 255, 255, 20),
+        IM_COL32(255, 255, 255, 20)
+    );
+
+    // Draw thumb border
+    dl->AddRect(
+        g0, g1,
+        IM_COL32(
+            (int)(thumb_color.x * 0.9f * 255),
+            (int)(thumb_color.y * 0.9f * 255),
+            (int)(thumb_color.z * 0.9f * 255),
+            180
+        ),
+        gr,
+        ImDrawFlags_None,
+        1.0f
+    );
+
     return changed;
 }
 
-// Combo with native frame border disabled and arrow blended into the frame;
-// one clean rounded rim drawn by us afterwards => single border, uniform hover.
 static bool combo_framed(const char* id, int* idx, const char* items) {
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
     ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
@@ -271,6 +483,7 @@ static bool row_section(const char* title) {
     return open;
 }
 
+// Dynamic accent section header
 static bool oxygen_section(const char* label, bool default_open) {
     const float R = 7.0f;
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
@@ -279,12 +492,32 @@ static bool oxygen_section(const char* label, bool default_open) {
     float w = ImGui::GetContentRegionAvail().x;
     float h = ImGui::GetFrameHeight();
     ImVec2 mx(mn.x + w, mn.y + h);
-    dl->AddRectFilled(mn, mx, IM_COL32(64, 112, 168, 255), R);
-    dl->AddRectFilledMultiColor(ImVec2(mn.x + 3, mn.y + 3), ImVec2(mx.x - 3, mn.y + h * 0.60f),
-                                IM_COL32(150,200,250,150), IM_COL32(150,200,250,150), IM_COL32(150,200,250,0), IM_COL32(150,200,250,0));
-    dl->AddRectFilledMultiColor(ImVec2(mn.x + 3, mn.y + h * 0.40f), ImVec2(mx.x - 3, mx.y - 3),
-                                IM_COL32(10,25,45,0), IM_COL32(10,25,45,0), IM_COL32(10,25,45,120), IM_COL32(10,25,45,120));
-    dl->AddRect(mn, mx, IM_COL32(150, 200, 250, 70), 1.0f, R);
+
+    ImVec4 sec_color = g_accent_active;
+    ImVec4 sec_light = ImVec4(
+        sec_color.x * 1.3f > 1.0f ? 1.0f : sec_color.x * 1.3f,
+        sec_color.y * 1.3f > 1.0f ? 1.0f : sec_color.y * 1.3f,
+        sec_color.z * 1.3f > 1.0f ? 1.0f : sec_color.z * 1.3f, 1.0f
+    );
+
+    // Base fill with rounding
+    dl->AddRectFilled(mn, mx, IM_COL32((int)(sec_color.x*255), (int)(sec_color.y*255), (int)(sec_color.z*255), 255), R);
+
+    // Highlight inset to hide sharp corners
+    float inset = 3.0f;
+    float highlight_h = h * 0.50f;
+    ImVec2 hl_tl(mn.x + inset, mn.y + inset);
+    ImVec2 hl_br(mx.x - inset, mn.y + highlight_h);
+
+    dl->AddRectFilledMultiColor(hl_tl, hl_br,
+                                IM_COL32((int)(sec_light.x*255), (int)(sec_light.y*255), (int)(sec_light.z*255), 130),
+                                IM_COL32((int)(sec_light.x*255), (int)(sec_light.y*255), (int)(sec_light.z*255), 130),
+                                IM_COL32(0,0,0,0),
+                                IM_COL32(0,0,0,0));
+
+    // Border with rounding
+    dl->AddRect(mn, mx, IM_COL32((int)(sec_light.x*255), (int)(sec_light.y*255), (int)(sec_light.z*255), 180), R, ImDrawFlags_None, 1.0f);
+
     ImGui::SetCursorScreenPos(mn);
     bool open = ImGui::CollapsingHeader(label, default_open ? ImGuiTreeNodeFlags_DefaultOpen : 0);
     ImGui::PopStyleVar();
@@ -300,18 +533,40 @@ static void status_chip(const char* label, bool on) {
     ImVec2 mx(mn.x + sz.x, mn.y + sz.y);
     float r = sz.y * 0.5f;
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(mn, mx, on ? IM_COL32(64, 158, 108, 235) : IM_COL32(255, 255, 255, 22), r);
-    if (on)
-        dl->AddRectFilledMultiColor(ImVec2(mn.x + 4, mn.y + 4), ImVec2(mx.x - 4, mn.y + sz.y * 0.55f),
-                                    IM_COL32(255,255,255,70), IM_COL32(255,255,255,70), IM_COL32(255,255,255,0), IM_COL32(255,255,255,0));
-    dl->AddRect(mn, mx, on ? IM_COL32(150, 230, 180, 140) : IM_COL32(255, 255, 255, 45), 1.0f, r);
-    dl->AddText(ImVec2(mn.x + pad.x, mn.y + pad.y),
-                on ? IM_COL32(232, 255, 242, 255) : IM_COL32(200, 212, 228, 150), label);
+
+    if (on) {
+        ImVec4 c = g_accent_color;
+        ImVec4 dark = ImVec4(c.x * 0.5f, c.y * 0.5f, c.z * 0.5f, 1.0f);
+        ImVec4 light = ImVec4(
+            c.x * 1.3f > 1.0f ? 1.0f : c.x * 1.3f,
+            c.y * 1.3f > 1.0f ? 1.0f : c.y * 1.3f,
+            c.z * 1.3f > 1.0f ? 1.0f : c.z * 1.3f, 1.0f
+        );
+
+        dl->AddRectFilled(mn, mx, IM_COL32((int)(dark.x*255), (int)(dark.y*255), (int)(dark.z*255), 255), r);
+
+        // Highlight inset to hide sharp corners
+        float inset = 3.0f;
+        ImVec2 hl_tl(mn.x + inset, mn.y + inset);
+        ImVec2 hl_br(mx.x - inset, mn.y + sz.y * 0.5f);
+
+        dl->AddRectFilledMultiColor(hl_tl, hl_br,
+                                    IM_COL32((int)(light.x*255), (int)(light.y*255), (int)(light.z*255), 180),
+                                    IM_COL32((int)(light.x*255), (int)(light.y*255), (int)(light.z*255), 180),
+                                    IM_COL32(0,0,0,0),
+                                    IM_COL32(0,0,0,0));
+
+        dl->AddRect(mn, mx, IM_COL32((int)(light.x*255), (int)(light.y*255), (int)(light.z*255), 200), r, ImDrawFlags_None, 1.0f);
+        dl->AddText(ImVec2(mn.x + pad.x, mn.y + pad.y), IM_COL32(232, 255, 242, 255), label);
+    } else {
+        dl->AddRectFilled(mn, mx, IM_COL32(40, 50, 60, 200), r);
+        dl->AddRect(mn, mx, IM_COL32(100, 120, 140, 100), r, ImDrawFlags_None, 1.0f);
+        dl->AddText(ImVec2(mn.x + pad.x, mn.y + pad.y), IM_COL32(180, 190, 200, 200), label);
+    }
     ImGui::Dummy(sz);
 }
 
 // Segmented control: rounded track + inset rounded pill for selection.
-// No corner flags anywhere, so no artifacts on first/last tab.
 static int g_tab = 0;
 static void segmented_tabs() {
     static const char* names[] = { "Left", "Right", "General", "Macros", "Config", "Analytics" };
@@ -344,10 +599,9 @@ static void segmented_tabs() {
 
         ImVec2 i0(s0.x + 2, s0.y + 2), i1(s1.x - 2, s1.y - 2);
         if (sel) {
-            dl->AddRectFilled(i0, i1, IM_COL32(86, 140, 200, 255), R - 2);
+            dl->AddRectFilled(i0, i1, IM_COL32((int)(g_accent_color.x*255), (int)(g_accent_color.y*255), (int)(g_accent_color.z*255), 255), R - 2);
             dl->AddRectFilledMultiColor(ImVec2(i0.x + 3, i0.y + 2), ImVec2(i1.x - 3, i0.y + (i1.y - i0.y) * 0.58f),
                                         IM_COL32(255,255,255,80), IM_COL32(255,255,255,80), IM_COL32(255,255,255,0), IM_COL32(255,255,255,0));
-            dl->AddRect(i0, i1, IM_COL32(165, 208, 250, 110), 1.0f, R - 2);
         } else if (hov) {
             dl->AddRectFilled(i0, i1, IM_COL32(255, 255, 255, 18), R - 2);
         }
@@ -465,7 +719,49 @@ static void draw_clicker_tab(ClickerProfile& profile, ActivationMode& mode,
     }
 }
 
+static void setup_kde_cursor() {
+    const char* home = getenv("HOME");
+    if (!home) return;
+    std::string path = std::string(home) + "/.config/kcminputrc";
+    FILE* f = fopen(path.c_str(), "r");
+    if (!f) return;
+    char line[256];
+    bool in_mouse = false;
+    char theme[128] = "";
+    char size[32] = "";
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "[Mouse]", 7) == 0) {
+            in_mouse = true;
+            continue;
+        }
+        if (line[0] == '[') {
+            in_mouse = false;
+            continue;
+        }
+        if (in_mouse) {
+            char* eq = strchr(line, '=');
+            if (eq) {
+                *eq = '\0';
+                char* key = line;
+                char* val = eq + 1;
+                while (*key == ' ' || *key == '\t') key++;
+                char* end = key + strlen(key) - 1;
+                while (end > key && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) *end-- = '\0';
+                while (*val == ' ' || *val == '\t') val++;
+                end = val + strlen(val) - 1;
+                while (end > val && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) *end-- = '\0';
+                if (strcmp(key, "cursorTheme") == 0) strncpy(theme, val, sizeof(theme)-1);
+                else if (strcmp(key, "cursorSize") == 0) strncpy(size, val, sizeof(size)-1);
+            }
+        }
+    }
+    fclose(f);
+    if (theme[0]) setenv("XCURSOR_THEME", theme, 1);
+    if (size[0]) setenv("XCURSOR_SIZE", size, 1);
+}
+
 void gui_run(GuiState& state) {
+    setup_kde_cursor();
     if (!glfwInit()) {
         fprintf(stderr, "Failed to initialize GLFW\n");
         return;
@@ -516,52 +812,8 @@ void gui_run(GuiState& state) {
         if (!font) io.Fonts->AddFontDefault();
     }
 
-    ImGui::StyleColorsDark();
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowPadding    = ImVec2(14, 12);
-    style.FramePadding     = ImVec2(10, 5);
-    style.ItemSpacing      = ImVec2(8, 7);
-    style.ItemInnerSpacing = ImVec2(6, 4);
-    style.WindowRounding   = 10.0f; style.ChildRounding   = 8.0f;
-    style.FrameRounding    = 7.0f;  style.PopupRounding   = 7.0f;
-    style.ScrollbarRounding= 8.0f;  style.GrabRounding    = 6.0f;
-    style.FrameBorderSize  = 1.0f;
-    style.PopupBorderSize  = 1.0f;
-    style.TabRounding      = 6.0f;
-    style.WindowBorderSize = 0.0f;
-
-    ImVec4* colors = style.Colors;
-    ImVec4 accent      {0.24f, 0.49f, 0.78f, 1.0f};   // Oxygen steel blue
-    ImVec4 accent_hover{0.33f, 0.58f, 0.86f, 1.0f};
-    ImVec4 accent_act  {0.17f, 0.37f, 0.62f, 1.0f};
-    colors[ImGuiCol_Text]            = ImVec4(0.90f, 0.95f, 1.00f, 1.0f);
-    colors[ImGuiCol_TextDisabled]    = ImVec4(0.62f, 0.70f, 0.80f, 1.0f);
-    colors[ImGuiCol_WindowBg]        = ImVec4(0, 0, 0, 0);
-    colors[ImGuiCol_ChildBg]         = ImVec4(0, 0, 0, 0);
-    colors[ImGuiCol_PopupBg]         = ImVec4(0.09f, 0.14f, 0.20f, 0.98f);
-    colors[ImGuiCol_FrameBg]         = ImVec4(0.04f, 0.09f, 0.16f, 0.45f);
-    colors[ImGuiCol_FrameBgHovered]  = ImVec4(0.09f, 0.17f, 0.27f, 0.60f);
-    colors[ImGuiCol_FrameBgActive]   = ImVec4(0.13f, 0.23f, 0.35f, 0.75f);
-    colors[ImGuiCol_TitleBg]         = ImVec4(0.10f, 0.16f, 0.24f, 1.0f);
-    colors[ImGuiCol_TitleBgActive]   = accent_act;
-    colors[ImGuiCol_MenuBarBg]       = colors[ImGuiCol_FrameBg];
-    colors[ImGuiCol_ScrollbarBg]     = ImVec4(0, 0, 0, 0);
-    colors[ImGuiCol_ScrollbarGrab]   = ImVec4(0.35f, 0.55f, 0.80f, 0.60f);
-    colors[ImGuiCol_CheckMark]       = ImVec4(0.75f, 0.90f, 1.00f, 1.0f);
-    colors[ImGuiCol_SliderGrab]       = ImVec4(0, 0, 0, 0);  // hidden; oxygen thumb drawn manually
-    colors[ImGuiCol_SliderGrabActive] = ImVec4(0, 0, 0, 0);
-    colors[ImGuiCol_Button]          = ImVec4(0.16f, 0.34f, 0.56f, 1.0f);
-    colors[ImGuiCol_ButtonHovered]   = ImVec4(0.24f, 0.46f, 0.72f, 1.0f);
-    colors[ImGuiCol_ButtonActive]    = ImVec4(0.12f, 0.26f, 0.44f, 1.0f);
-    colors[ImGuiCol_Border]          = ImVec4(0.60f, 0.78f, 0.96f, 0.16f);
-    colors[ImGuiCol_Header]          = ImVec4(0, 0, 0, 0);
-    colors[ImGuiCol_HeaderHovered]   = ImVec4(1, 1, 1, 0.08f);
-    colors[ImGuiCol_HeaderActive]    = ImVec4(1, 1, 1, 0.14f);
-    colors[ImGuiCol_Separator]       = ImVec4(1.0f, 1.0f, 1.0f, 0.12f);
-    colors[ImGuiCol_Tab]             = ImVec4(0.10f, 0.16f, 0.24f, 1.0f);
-    colors[ImGuiCol_TabHovered]      = accent_hover;
-    colors[ImGuiCol_TabActive]       = accent;
-    colors[ImGuiCol_TextSelectedBg]  = ImVec4(0.33f, 0.58f, 0.86f, 0.35f);
+    // Setup Oxygen-style theme (replaces manual StyleColorsDark and color assignments)
+    setup_oxygen_theme(state.config.accent_preset, state.config.accent_r, state.config.accent_g, state.config.accent_b);
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
@@ -607,18 +859,29 @@ void gui_run(GuiState& state) {
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
 
-        ImGui::GetBackgroundDrawList()->AddRectFilledMultiColor(
-            ImVec2(0, 0), ImVec2((float)display_w, (float)display_h),
-            IM_COL32(42, 60, 82, 255),  IM_COL32(42, 60, 82, 255),   // top: slate blue
-            IM_COL32(14, 22, 32, 255),  IM_COL32(14, 22, 32, 255));  // bottom: deep navy
-
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2((float)display_w, (float)display_h));
 
         ImGuiWindowFlags wf = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                              ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
+                              ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
+                              ImGuiWindowFlags_NoBackground; // Ensures our custom background shows through rounded corners
 
         if (ImGui::Begin("Ghast Clicker", nullptr, wf)) {
+            // Draw theme-aware gradient background INSIDE the window to perfectly match rounded corners
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            ImVec2 w_min = ImVec2(0, 0);
+            ImVec2 w_max = ImVec2((float)display_w, (float)display_h);
+
+            // Use a nicer gradient based on the active theme (more visible than before)
+            ImVec4 bg_top = ImVec4(g_accent_color.x * 0.25f, g_accent_color.y * 0.25f, g_accent_color.z * 0.25f, 1.0f);
+            ImVec4 bg_bot = ImVec4(g_accent_color.x * 0.08f, g_accent_color.y * 0.08f, g_accent_color.z * 0.08f, 1.0f);
+
+            draw_list->AddRectFilledMultiColor(w_min, w_max,
+                IM_COL32((int)(bg_top.x*255), (int)(bg_top.y*255), (int)(bg_top.z*255), 255),
+                IM_COL32((int)(bg_top.x*255), (int)(bg_top.y*255), (int)(bg_top.z*255), 255),
+                IM_COL32((int)(bg_bot.x*255), (int)(bg_bot.y*255), (int)(bg_bot.z*255), 255),
+                IM_COL32((int)(bg_bot.x*255), (int)(bg_bot.y*255), (int)(bg_bot.z*255), 255));
+
             bool l_on = state.left.is_enabled() || state.left_armed;
             bool r_on = state.right.is_enabled() || state.right_armed;
             status_chip(l_on ? "L: ON" : "L: off", l_on);
@@ -650,7 +913,11 @@ void gui_run(GuiState& state) {
 
                     ImGui::Text("Keybinds");
                     ImGui::Separator();
+                    ImGui::BeginDisabled(!state.config.inventory_key_enabled);
                     keybind_button("Inventory Key", state.config.key_inventory);
+                    ImGui::EndDisabled();
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Enabled##inv", &state.config.inventory_key_enabled);
                     ImGui::TextDisabled("Pauses clicking while inventory is open");
 
                     ImGui::Spacing();
@@ -681,7 +948,7 @@ void gui_run(GuiState& state) {
                     ImGui::Spacing();
                     ImGui::Separator();
                     ImGui::Text("Audio");
-    ImGui::Checkbox("Toggle Sound", &state.config.audio_enabled);
+                    ImGui::Checkbox("Toggle Sound", &state.config.audio_enabled);
                     if (ImGui::IsItemHovered())
                         ImGui::SetTooltip("Play a beep when clickers toggle on/off");
 
@@ -883,6 +1150,22 @@ void gui_run(GuiState& state) {
                     if (status_timer > 0) {
                         ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", status_msg);
                         status_timer -= io.DeltaTime;
+                    }
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Text("Appearance");
+
+                    bool theme_changed = false;
+                    if (combo_framed("Accent Preset", &state.config.accent_preset, "Oxygen Blue\0Red\0Green\0Purple\0Custom\0Follow KDE\0"))
+                        theme_changed = true;
+
+                    if (state.config.accent_preset == 4) { // Custom
+                        if (ImGui::ColorEdit3("Custom Color", &state.config.accent_r))
+                            theme_changed = true;
+                    }
+
+                    if (theme_changed) {
+                        setup_oxygen_theme(state.config.accent_preset, state.config.accent_r, state.config.accent_g, state.config.accent_b);
                     }
                     break;
                 }
