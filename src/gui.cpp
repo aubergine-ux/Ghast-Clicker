@@ -102,6 +102,13 @@ static void tooltip(const char* text) {
         ImGui::SetTooltip("%s", text);
 }
 
+// Grey text that wraps to the window width.
+static void hint(const char* text) {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextWrapped("%s", text);
+    ImGui::PopStyleColor();
+}
+
 // Grey "(?)" that explains the item before it.
 static void help_marker(const char* text) {
     ImGui::SameLine();
@@ -315,8 +322,7 @@ static void home_tab(GuiState& state) {
     auto& cfg = state.config;
     auto& combat = state.combat;
 
-    ImGui::TextWrapped("Hotkeys work anywhere: switch to your game and press them. "
-                       "Click a key button below to rebind it.");
+    ImGui::TextWrapped("Hotkeys work from inside your game. Click a key below to rebind it.");
     ImGui::Spacing();
 
     ImGuiTableFlags tf = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
@@ -420,7 +426,7 @@ static void combat_tab(GuiState& state) {
         keybind_input("jr_key", state.config.key_jump_reset, 120);
         ImGui::SameLine();
         combat_status(combat.jump.is_enabled(), combat.jump.busy());
-        ImGui::TextDisabled("Taps Space right after you attack, so you jump as the return hit lands "
+        hint("Taps Space right after you attack, so you jump as the return hit lands "
                             "and take less knockback.");
 
         section("Timing");
@@ -460,7 +466,7 @@ static void combat_tab(GuiState& state) {
         keybind_input("sr_key", state.config.key_sprint_reset, 120);
         ImGui::SameLine();
         combat_status(combat.sprint.is_enabled(), combat.sprint.busy());
-        ImGui::TextDisabled("Breaks sprint for a tick or two after you attack so your next hit "
+        hint("Breaks sprint for a tick or two after you attack so your next hit "
                             "deals full sprint knockback.");
 
         int m = static_cast<int>(sr.mode);

@@ -1,20 +1,22 @@
-<div align="center">
+<p align="center">
+  <img src="assets/banner.svg" alt="Ghast Clicker" width="100%">
+</p>
 
-# Ghast Clicker
-
-A humanized auto-clicker for Linux, Wayland included.
-
-![Linux](https://img.shields.io/badge/linux-wayland%20%7C%20x11-8b5cf6?style=flat-square&logo=linux&logoColor=white)
-![C++17](https://img.shields.io/badge/c%2B%2B-17-8b5cf6?style=flat-square)
-![GPLv3](https://img.shields.io/badge/license-GPLv3-8b5cf6?style=flat-square)
-
-</div>
+<p align="center">
+  <img src="https://img.shields.io/badge/linux-wayland%20%7C%20x11-8b5cf6?style=flat-square&logo=linux&logoColor=white" alt="Linux">
+  <img src="https://img.shields.io/badge/c%2B%2B-17-8b5cf6?style=flat-square" alt="C++17">
+  <img src="https://img.shields.io/badge/license-GPLv3-8b5cf6?style=flat-square" alt="GPLv3">
+</p>
 
 <br>
 
 Ghast Clicker started as a Linux port of [GhostTap](https://github.com/IcySnex/GhostTap). GhostTap is a Forge mod that clicks from inside Minecraft; this one is a regular program that sends clicks through `/dev/uinput`, so it doesn't care which game, launcher or compositor you use.
 
 The clicking isn't a fixed interval. CPS is drawn from a distribution and drifts over time, with the occasional spike, stutter, long hold, double-click or short break thrown in, the way real clicking looks.
+
+<p align="center">
+  <img src="assets/home.png" alt="The Home tab" width="680">
+</p>
 
 ## What's in it
 
@@ -26,6 +28,12 @@ The clicking isn't a fixed interval. CPS is drawn from a distribution and drifts
 - Pauses while your inventory is open, plus an optional hotbar slot filter
 - Live CPS graphs, session stats and CSV export
 - Saved profiles in `~/.config/ghast-clicker/`
+
+<p align="center">
+  <img src="assets/left.png" alt="Clicker settings" width="48%">
+  &nbsp;
+  <img src="assets/combat.png" alt="Jump Reset and Sprint Reset settings" width="48%">
+</p>
 
 ## Install
 
